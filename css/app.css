@@ -419,3 +419,11 @@ table.sc { min-width: 0; table-layout: fixed; }
 table.sc th.rl { width: 44px; padding-left: 2px; }
 table.sc th.tot, table.sc td.tot { width: 36px; }
 .cellscore { width: 24px; height: 24px; font-size: 12.5px; }
+
+/* 코스 검색 시트 */
+.divider { height: 1px; background: var(--line); margin: 16px 0 12px; }
+.searching { display: flex; align-items: center; gap: 10px; padding: 14px 4px; color: var(--ink-2); font-weight: 600; }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--line); border-top-color: var(--brand); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.sheet .btns a.btn { text-decoration: none; }
+.sheet select.input { appearance: auto; }

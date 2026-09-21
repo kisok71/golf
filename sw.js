@@ -1,9 +1,9 @@
-const VERSION = 'gn-v2';
+const VERSION = 'gn-v3';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
-  'js/main.js', 'js/db.js', 'js/util.js', 'js/icons.js', 'js/ui.js', 'js/stats.js', 'js/charts.js', 'js/sample.js', 'js/ocr.js', 'js/scorecard.js',
+  'js/main.js', 'js/db.js', 'js/util.js', 'js/icons.js', 'js/ui.js', 'js/stats.js', 'js/charts.js', 'js/sample.js', 'js/ocr.js', 'js/scorecard.js', 'js/coursesearch.js',
   'js/views/dashboard.js', 'js/views/rounds.js', 'js/views/detail.js', 'js/views/editor.js', 'js/views/scan.js',
-  'js/views/courses.js', 'js/views/settings.js',
+  'js/views/courses.js', 'js/views/coursepicker.js', 'js/views/settings.js',
   'icons/icon.svg', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'icons/favicon-32.png'
 ];
 

@@ -22,6 +22,7 @@ node server.mjs        # http://localhost:5173  (Windows: start.bat 더블클릭
 | 요구사항 | 구현 |
 |---|---|
 | 라운딩 일자·코스·시간·날씨 | 정보 탭 (날씨 6종 + 기온). 코스는 저장돼 다음부터 자동완성, 홀별 파도 함께 불러옴 |
+| 코스 검색 | 코스 이름 입력 후 **검색** → 내 코스 + OpenStreetMap 검색 결과 목록에서 선택, 27홀 이상이면 전/후반 9홀 선택. 못 찾으면 웹 검색 링크 · 붙여넣기 입력 |
 | 홀별 스코어 · 퍼팅 · OB · 해저드 | 홀별 입력 탭. 버디/파/보기 빠른 버튼, ± 스테퍼, 9홀/18홀 |
 | 분석 대시보드 | 평균·베스트·추세, 인사이트, 스코어 분포, 파 타입별, 퍼팅(3퍼트·그린적중), OB/해저드, 홀별 히트맵, 전/후반, 날씨별, 코스별 |
 | 스코어카드 이미지 자동 적용 | 기기 안 OCR(Tesseract.js, 한글+영문). 코스명 · 날짜 · 시간 · 홀별 파 · **내 이름 줄의 스코어**를 읽어 확인·수정 후 적용 |
@@ -47,11 +48,20 @@ js/db.js               IndexedDB (rounds, courses)
 js/stats.js            분석 로직 · 인사이트 생성
 js/charts.js           SVG/HTML 차트 (외부 라이브러리 없음)
 js/ocr.js              전처리(기울기·괘선 제거) · OCR 실행
+js/coursesearch.js      코스 검색(OpenStreetMap) · 홀별 파 추출 · 붙여넣기 해석
 js/scorecard.js        OCR 결과 해석(행 분류, 파 대비 변환, 합계 검증, 코스명/날짜 추출)
 js/views/*.js          화면 (dashboard, rounds, detail, editor, scan, courses, settings)
 vendor/tesseract/      OCR 엔진 + eng · kor 데이터
 icons/                 앱 아이콘 (icon.svg → PNG)
 ```
+
+## 코스 검색 (홀별 파 가져오기)
+
+- 데이터 출처는 **OpenStreetMap**(Nominatim 검색 + Overpass 홀 데이터)입니다. 등록·입력된 골프장만 찾을 수 있고, 홀별 파가 입력돼 있지 않은 곳도 있습니다.
+- 못 찾는 경우: ① 스코어카드 사진을 불러오면 파도 함께 읽고, ② 웹에서 파 표를 복사해 **붙여넣기**로 입력하거나, ③ 직접 입력하면 됩니다. 한 번 저장한 코스는 다음부터 내 코스로 바로 불러옵니다.
+- Overpass 서버가 바쁠 때는 10~20초 걸리거나 실패할 수 있습니다. 여러 미러 서버에 자동으로 재시도합니다.
+- 프라이버시: 검색할 때 **입력한 코스 이름만** OpenStreetMap 서버로 전송됩니다. 라운드 기록과 사진은 전송되지 않습니다.
+- 구현: `js/coursesearch.js`(검색·파싱), `js/views/coursepicker.js`(선택 화면)
 
 ## 데이터 주의
 

@@ -65,7 +65,7 @@ export async function mount(el) {
         : `<button class="li" id="add-sample"><span class="ico">${ic('spark')}</span><div class="grow"><b>샘플 데이터 추가</b><div class="small muted">대시보드를 미리 체험해볼 수 있어요 (22라운드)</div></div></button>`}
       <button class="li" id="wipe"><span class="ico" style="background:color-mix(in srgb,var(--over) 14%,transparent);color:var(--bad-text)">${ic('alert')}</span><div class="grow"><b style="color:var(--bad-text)">모든 데이터 삭제</b><div class="small muted">되돌릴 수 없어요</div></div></button>
     </div>
-    <p class="small muted" style="text-align:center;margin-top:28px">그린노트 · 데이터는 기기 밖으로 나가지 않아요</p>`;
+    <p class="small muted" style="text-align:center;margin-top:28px">그린노트 · 기록은 기기 밖으로 나가지 않아요 (코스 검색 시 코스 이름만 OpenStreetMap으로 전송)</p>`;
   };
   await draw();
 

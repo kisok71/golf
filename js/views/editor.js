@@ -5,6 +5,7 @@ import {
   parGridHtml, cyclePar, todayStr
 } from '../util.js';
 import { toast, confirmDialog } from '../ui.js';
+import { openCoursePicker } from './coursepicker.js';
 
 const DRAFT = 'gn.draft';
 const readDraft = () => { try { return JSON.parse(localStorage.getItem(DRAFT)); } catch { return null; } };
@@ -65,7 +66,9 @@ export async function mount(el, { id }) {
           <div class="field"><label for="f-time">티오프 시간</label><input id="f-time" class="input" type="time" value="${esc(rd.time || '')}"></div>
         </div>
         <div class="field"><label for="f-course">코스</label>
-          <input id="f-course" class="input" list="course-list" placeholder="코스 이름" value="${esc(rd.course)}" autocomplete="off">
+          <div class="row" style="gap:8px"><input id="f-course" class="input" list="course-list" placeholder="코스 이름" value="${esc(rd.course)}" autocomplete="off" enterkeyhint="search">
+            <button class="btn soft" data-act="search" style="flex:none;padding:0 16px" aria-label="코스 검색">${ic('search')} 검색</button></div>
+          <span class="small muted">이름을 입력하고 검색하면 홀별 파를 가져와요</span>
           <datalist id="course-list">${courses.map(c => `<option value="${esc(c.name)}">`).join('')}</datalist></div>
         <div class="field"><span class="lb">홀 수</span>
           <div class="seg"><button data-act="holes" data-v="18" class="${rd.holes.length === 18 ? 'on' : ''}">18홀</button><button data-act="holes" data-v="9" class="${rd.holes.length === 9 ? 'on' : ''}">9홀</button></div></div>
@@ -152,6 +155,7 @@ export async function mount(el, { id }) {
       case 'start': mut(() => { st.step = 'holes'; st.cur = firstEmpty(rd); st.fromScan = false; }); break;
       case 'restart': confirmDialog({ title: '새로 시작할까요?', message: '작성 중이던 내용은 사라져요.', ok: '새로 시작', danger: true }).then(ok => { if (ok) { clearDraft(); st = { round: newRound(), step: 'info', cur: 0, editing: false }; render(); } }); break;
       case 'scan': location.hash = '#/scan'; break;
+      case 'search': searchCourse(); break;
       case 'weather': mut(() => (rd.weather = b.dataset.v)); break;
       case 'holes': mut(() => resizeRound(rd, Number(b.dataset.v))); if (st.cur >= rd.holes.length) mut(() => (st.cur = 0)); break;
       case 'par': mut(() => { const i = Number(b.dataset.i); rd.pars[i] = cyclePar(rd.pars[i]); }); break;
@@ -170,6 +174,28 @@ export async function mount(el, { id }) {
       case 'save': save(); break;
     }
   };
+
+  el.onkeydown = e => {
+    if (e.key === 'Enter' && e.target.id === 'f-course') { e.preventDefault(); e.target.blur(); searchCourse(); }
+  };
+
+  function searchCourse() {
+    openCoursePicker({
+      query: r().course, saved: courses,
+      onApply: ({ name, pars }) => {
+        const rd = r();
+        const n = pars.length <= 9 ? 9 : 18;
+        const missing = pars.filter(p => p == null).length;
+        mut(() => {
+          resizeRound(rd, n);
+          rd.pars = Array.from({ length: n }, (_, i) => pars[i] ?? rd.pars[i] ?? 4);
+          if (name) rd.course = name;
+          st.cur = Math.min(st.cur, n - 1);
+        });
+        toast(missing ? `${n}홀 파를 채웠어요 · ${missing}홀은 정보가 없어 기본값이에요. 확인해주세요` : `${n}홀 파 정보를 채웠어요. 맞는지 확인해주세요`, 3600);
+      }
+    });
+  }
 
   el.oninput = e => {
     const rd = r(), t = e.target;
