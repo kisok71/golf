@@ -24,7 +24,7 @@ function nineTable(r, from) {
   const row = (label, fn, total) => `<tr><th class="rl">${label}</th>${idx.map(fn).join('')}<td class="tot">${total}</td></tr>`;
   const label = from === 0 ? (r.holes.length === 9 ? 'TOTAL' : 'OUT') : 'IN';
   return `<div class="sc-wrap"><table class="sc">
-    <thead><tr><th class="rl" title="${esc(nineName(r, from / 9))}">${esc(nineName(r, from / 9)) || '홀'}</th>${idx.map(i => `<th>${i + 1}</th>`).join('')}<th class="tot">${label}</th></tr></thead>
+    <thead><tr><th class="rl" title="${esc(nineName(r, from / 9))}">${esc(nineName(r, from / 9)) || '홀'}</th>${idx.map(i => `<th><a class="holelink" href="#/edit/${r.id}?hole=${i}" aria-label="${i + 1}번 홀 수정">${i + 1}</a></th>`).join('')}<th class="tot">${label}</th></tr></thead>
     <tbody>
       ${row('파', i => `<td>${r.pars[i]}</td>`, parSum)}
       ${row('스코어', i => `<td>${cell(r.holes[i].score, r.pars[i])}</td>`, played.length ? sc : '–')}
@@ -61,7 +61,8 @@ export async function mount(el, { id }) {
 
   <div class="section-title"><span>스코어카드</span></div>
   <div class="card">${nineTable(r, 0)}${r.holes.length > 9 ? `<div style="height:14px"></div>${nineTable(r, 9)}` : ''}
-    <div class="legend" style="margin-top:12px"><span><i class="t-b1" style="border-radius:50%"></i>버디↓</span><span><i class="t-0"></i>파</span><span><i class="t-r1"></i>보기</span><span><i class="t-r3"></i>더블↑</span></div></div>
+    <p class="small muted" style="margin:10px 0 0">홀 번호를 누르면 그 홀의 스코어 · 퍼팅 · OB · 해저드를 수정할 수 있어요.</p>
+    <div class="legend" style="margin-top:8px"><span><i class="t-b1" style="border-radius:50%"></i>버디↓</span><span><i class="t-0"></i>파</span><span><i class="t-r1"></i>보기</span><span><i class="t-r3"></i>더블↑</span></div></div>
 
   ${r.memo ? `<div class="section-title"><span>메모</span></div><div class="card"><p style="margin:0;white-space:pre-wrap">${esc(r.memo)}</p></div>` : ''}
   ${r.image ? `<div class="section-title"><span>스코어카드 사진</span></div><img class="photo" src="${r.image}" alt="스코어카드 사진">` : ''}

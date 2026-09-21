@@ -2,7 +2,7 @@ import { db } from '../db.js';
 import { ic } from '../icons.js';
 import {
   esc, newRound, resizeRound, summarize, signed, clamp, sum, WEATHER, weatherIcon, scoreName, tClass,
-  parGridHtml, cyclePar, todayStr, courseRecord
+  parGridHtml, cyclePar, todayStr, courseRecord, defaultPutts
 } from '../util.js';
 import { toast, confirmDialog } from '../ui.js';
 import { openCoursePicker } from './coursepicker.js';
@@ -17,13 +17,16 @@ export function setDraft(round, { step = 'info', cur = 0, fromScan = false } = {
   writeDraft({ round, step, cur, fromScan });
 }
 
-export async function mount(el, { id }) {
+export async function mount(el, { id: rawId }) {
+  // 상세 화면에서 홀 번호를 눌러 들어오면 #/edit/<id>?hole=<번호(0부터)> 형태
+  const [id, qs] = String(rawId || '').split('?');
+  const holeParam = Number(new URLSearchParams(qs || '').get('hole'));
   const courses = await db.courses();
   let st;
   if (id) {
     const r = await db.round(id);
     if (!r) { location.hash = '#/rounds'; return; }
-    st = { round: structuredClone(r), step: 'holes', cur: firstEmpty(r), editing: true };
+    st = { round: structuredClone(r), step: 'holes', cur: Number.isInteger(holeParam) && qs && holeParam >= 0 && holeParam < r.holes.length ? holeParam : firstEmpty(r), editing: true };
   } else {
     const d = readDraft();
     st = d?.round ? { ...d, resumed: !d.fromScan, editing: false } : { round: newRound(), step: 'info', cur: 0, editing: false };
@@ -61,7 +64,7 @@ export async function mount(el, { id }) {
     const rd = r();
     return `
       ${st.editing ? '' : `<button class="btn soft block" data-act="scan" style="margin-bottom:14px">${ic('camera')} 스코어카드 사진으로 채우기</button>`}
-      ${st.fromScan ? `<div class="banner">${ic('check', 18)}<span class="grow">사진에서 읽은 값을 채웠어요. 코스명·날씨를 입력하고 홀별 입력에서 OB·해저드를 추가하세요.</span></div>` : ''}
+      ${st.fromScan ? `<div class="banner">${ic('check', 18)}<span class="grow">사진에서 읽은 값을 채웠어요. 퍼팅은 기본 2로 넣었으니 홀별 입력에서 퍼팅·OB·해저드를 수정하세요.</span></div>` : ''}
       <div class="card">
         <div class="two">
           <div class="field"><label for="f-date">날짜</label><input id="f-date" class="input" type="date" value="${esc(rd.date)}" max="${todayStr()}"></div>
@@ -139,6 +142,7 @@ export async function mount(el, { id }) {
   const setHole = patch => mut(() => {
     const h = r().holes[st.cur];
     Object.assign(h, patch);
+    if (patch.score != null && h.putts == null) h.putts = defaultPutts(h.score); // 퍼팅은 기본 2, 아래 스테퍼로 수정
     if (h.score != null && h.putts != null) h.putts = Math.min(h.putts, Math.max(h.score, 0));
   });
 

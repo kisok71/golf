@@ -92,6 +92,9 @@ export function summarize(r) {
   return { n, score, par, diff: score - par, putts, puttsN, ob, hz, filled, complete: filled === n, gir, girN, parTotal: sum(r.pars) };
 }
 
+/** 스코어를 입력했을 때 퍼팅의 기본값: 2 (홀인원은 0, 2타 이하로 끝난 홀은 스코어-1). 나중에 홀별로 수정한다 */
+export const defaultPutts = score => (score == null ? null : score <= 1 ? 0 : Math.min(2, score - 1));
+
 /** 라운드의 전반(0)/후반(1) 9홀 코스 이름 */
 export const nineName = (r, half) => String((half === 0 ? r.frontName : r.backName) || '').trim();
 

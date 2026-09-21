@@ -429,3 +429,5 @@ table.sc th.tot, table.sc td.tot { width: 36px; }
 .sheet select.input { appearance: auto; }
 
 table.sc th.rl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.holelink { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; display: block; padding: 4px 0; }

@@ -101,7 +101,8 @@ export function matchesName(label, name) {
 export function parseScorecard(data, { player = '' } = {}) {
   const rows = buildRows(data.words || []);
   const out = [];
-  let range = 'front', parsSeen = 0, sawHeader = false, parSums = null;
+  let range = 'front', parsSeen = 0, sawHeader = false, parSums = null, headers = 0;
+  const parNine = {}; // 9칸짜리 파 줄의 합계 (전반/후반)
   const assigned = { front: {}, back: {}, all: {} };
 
   for (const row of rows) {
@@ -110,7 +111,13 @@ export function parseScorecard(data, { player = '' } = {}) {
     const v = parsed.vals;
     const item = { vals: v, subs: parsed.subs, label: row.label, incomplete: parsed.incomplete, role: 'ignore', range: v.length === 18 ? 'all' : range };
 
-    if (isSeq(v, 1)) { range = 'front'; sawHeader = true; item.range = v.length === 18 ? 'all' : 'front'; out.push(item); continue; }
+    if (isSeq(v, 1)) {
+      sawHeader = true;
+      if (v.length < 18) range = headers++ === 0 ? 'front' : 'back';
+      item.range = v.length === 18 ? 'all' : range;
+      out.push(item);
+      continue;
+    }
     if (isSeq(v, 10)) { range = 'back'; sawHeader = true; item.range = 'back'; out.push(item); continue; }
     if (isHdcp(v)) { out.push(item); continue; }
 
@@ -120,13 +127,14 @@ export function parseScorecard(data, { player = '' } = {}) {
       parsSeen++;
       item.role = 'par';
       assigned[item.range].par = true;
-      if (!parSums && v.length === 18) parSums = chunkSums(v);
+      if (v.length === 18) { if (!parSums) parSums = chunkSums(v); } else parNine[item.range] = sum(v.filter(x => x != null));
       out.push(item);
       continue;
     }
 
     const sums = chunkSums(v);
-    const relBySubs = !!parSums && item.subs.length > 0 && item.subs.every((s, k) => s === sums[k] + parSums[k]);
+    const expectPar = k => (v.length >= 18 ? parSums?.[k] : parNine[item.range]);
+    const relBySubs = item.subs.length > 0 && item.subs.every((s, k) => expectPar(k) != null && s === sums[k] + expectPar(k));
     const rel = relBySubs || v.some(x => x != null && x < 0);
     const a = v.filter(x => x != null);
     const avg = sum(a) / Math.max(1, a.length);
@@ -143,38 +151,58 @@ export function parseScorecard(data, { player = '' } = {}) {
   if (playerMatched) {
     const taken = new Set();
     for (const r of out) {
-      if (!r.candidate || r.candidate === 'putts') continue;
+      // 라벨이 붙은 줄은 (숫자가 퍼팅처럼 보여도) 다른 사람 줄이므로 제외한다. 라벨이 없거나 '퍼팅/PUTT'인 줄만 퍼팅 줄로 남긴다
+      if (r.candidate === 'putts') {
+        if (r.label && !/퍼|putt/i.test(r.label) && !matchesName(r.label, player)) r.role = 'ignore';
+        continue;
+      }
+      if (!r.candidate) continue;
       if (matchesName(r.label, player) && !taken.has(r.range)) { taken.add(r.range); r.role = r.candidate; }
       else r.role = 'ignore';
     }
   }
-  return { rows: out, playerMatched, ...findMeta(data.text || '') };
+  return { rows: out, playerMatched, ...findMeta(data.text || '', { player }) };
 }
 
-/** 코스명(제목) · 날짜 · 시간을 찾는다 */
-export function findMeta(text) {
+/** 화면 제목·버튼처럼 골프장 이름이 아닌 문구 */
+const NOT_TITLE = /스코어카드|스마트스코어|스코어|홀별|거리정보|보기|결과|공유|확인|닫기|등록|저장|뒤로/;
+
+/** 골프장 이름 · 날짜 · 시간 · 전반/후반 9홀 코스 이름(예: "동-서")을 찾는다 */
+export function findMeta(text, { player = '' } = {}) {
   const lines = String(text).split('\n');
   const dRe = /(20\d{2})\s*[.\-/년]\s*(\d{1,2})\s*[.\-/월]\s*(\d{1,2})/;
-  let date = null, time = null, dateLine = -1;
-  lines.forEach((ln, i) => {
-    if (date) return;
+  let date = null, time = null;
+  for (const ln of lines) {
     const m = ln.match(dRe);
-    if (!m) return;
+    if (!m) continue;
     const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
-    if (mo < 1 || mo > 12 || d < 1 || d > 31) return;
+    if (mo < 1 || mo > 12 || d < 1 || d > 31) continue;
     date = `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    dateLine = i;
     const t = ln.slice(ln.indexOf(m[0]) + m[0].length).match(/(\d{1,2})\s*:\s*(\d{2})/);
     if (t && Number(t[1]) < 24 && Number(t[2]) < 60) time = `${String(t[1]).padStart(2, '0')}:${t[2]}`;
-  });
-  // 코스명: 날짜 줄 위쪽에서 가장 긴 한글 덩어리
+    break;
+  }
+  // 표(HOLE 줄) 위쪽만 본다
+  const holeAt = lines.findIndex(l => /\bHOLE\b/i.test(l));
+  const head = lines.slice(0, holeAt > 0 ? holeAt : Math.min(lines.length, 12));
+
+  // 골프장 이름: 화면 제목·버튼·내 이름을 뺀 첫 한글 덩어리
   let title = '';
-  const upto = dateLine >= 0 ? dateLine + 1 : Math.min(lines.length, 6);
-  for (let i = 0; i < upto; i++) {
-    for (const run of lines[i].match(/[가-힣][가-힣\s]*[가-힣]|[가-힣]/g) || []) {
+  outer: for (const ln of head) {
+    for (const run of ln.match(/[가-힣][가-힣\s]*[가-힣]/g) || []) {
       const r = run.replace(/\s+/g, '');
-      if (r.length > title.length && r.length >= 2) title = r;
+      if (r.length < 2 || NOT_TITLE.test(r) || (player && matchesName(r, player))) continue;
+      title = r;
+      break outer;
     }
   }
-  return { date, time, title };
+
+  // 전반/후반 9홀 코스 이름: "동-서" 처럼 한글 두 덩어리가 구분 기호로만 이어진 줄
+  let front = '', back = '';
+  for (const ln of head) {
+    const t = ln.replace(/[^가-힣\-–—~→]/g, '');
+    const m = t.match(/^([가-힣]{1,4})[-–—~→]([가-힣]{1,4})$/);
+    if (m) { front = m[1]; back = m[2]; break; }
+  }
+  return { date, time, title, front, back };
 }

@@ -1,7 +1,7 @@
 import { ic } from '../icons.js';
-import { esc, newRound, DEFAULT_PARS, todayStr, sum } from '../util.js';
+import { esc, newRound, DEFAULT_PARS, todayStr, sum, defaultPutts } from '../util.js';
 import { loadBitmap, preprocess, recognize, thumbnail } from '../ocr.js';
-import { parseScorecard, chunkSums } from '../scorecard.js';
+import { parseScorecard, chunkSums, matchesName } from '../scorecard.js';
 import { pageHead, toast } from '../ui.js';
 import { setDraft } from './editor.js';
 
@@ -93,19 +93,19 @@ export async function mount(el) {
       const bmp = await loadBitmap(file);
       const image = thumbnail(bmp);
       const used = r => r.filter(x => x.role !== 'ignore').length;
-      let parsed = null, meta = { date: null, time: null, title: '' };
+      let parsed = null, meta = { date: null, time: null, title: '', front: '', back: '' };
       for (let k = 0; k < ATTEMPTS.length; k++) {
         if (k) { state.status = '다른 방식으로 한 번 더 읽는 중…'; state.progress = 0.3; update({}); }
         const [pre, psm, lang] = ATTEMPTS[k];
         const data = await recognize(preprocess(bmp, pre), update, { psm, lang });
         const p = parseScorecard(data, { player });
-        meta = { date: meta.date || p.date, time: meta.time || p.time, title: meta.title || p.title };
+        meta = { date: meta.date || p.date, time: meta.time || p.time, title: meta.title || p.title, front: meta.front || p.front, back: meta.back || p.back };
         if (!parsed || used(p.rows) > used(parsed.rows)) parsed = p;
         if (parsed.rows.some(r => r.role === 'par') && parsed.rows.some(r => r.role === 'score' || r.role === 'score_rel')) break;
       }
       state = {
         phase: 'review', preview: prevUrl, image, rows: parsed.rows, player, playerMatched: parsed.playerMatched,
-        date: meta.date || todayStr(), dateFound: !!meta.date, time: meta.time || '', title: meta.title || ''
+        date: meta.date || todayStr(), dateFound: !!meta.date, time: meta.time || '', title: meta.title || '', front: meta.front || '', back: meta.back || ''
       };
     } catch (err) {
       console.error(err);
@@ -125,6 +125,8 @@ export async function mount(el) {
     else if (t.id === 's-date') state.date = t.value;
     else if (t.id === 's-time') state.time = t.value;
     else if (t.id === 's-title') state.title = t.value.trim();
+    else if (t.id === 's-front') state.front = t.value.trim();
+    else if (t.id === 's-back') state.back = t.value.trim();
   };
   el.oninput = e => {
     const t = e.target;
@@ -150,11 +152,14 @@ export async function mount(el) {
     round.date = state.date || todayStr();
     if (state.time) round.time = state.time;
     if (state.title) round.course = state.title;
+    round.frontName = state.front || '';
+    round.backName = n >= 18 ? state.back || '' : '';
     round.pars = Array.from({ length: n }, (_, i) => parAt(i));
     round.holes = Array.from({ length: n }, (_, i) => {
       const s = score[i] != null ? score[i] : rel[i] != null ? parAt(i) + rel[i] : null;
       const p = putts[i];
-      return { score: s >= 1 ? s : null, putts: s != null && p != null && p <= s ? p : null, ob: 0, hazard: 0 };
+      const ok = s != null && s >= 1;
+      return { score: ok ? s : null, putts: !ok ? null : p != null && p <= s ? p : defaultPutts(s), ob: 0, hazard: 0 };
     });
     round.image = state.image;
     setDraft(round, { step: 'info', fromScan: true });
@@ -204,7 +209,7 @@ function reviewHtml(s) {
       chk.every(c => c.ok) ? `✓ 카드의 합계(${chk.map(c => c.sub).join(' · ')})와 일치해요`
         : `합계가 달라요 · 카드 ${chk.map(c => c.sub).join(' / ')} ↔ 읽은 값 ${chk.map(c => c.calc).join(' / ')} — 숫자를 확인하세요`}</div>` : '';
     return `<div class="scanrow ${r.role === 'ignore' ? 'ignored' : ''}">
-      <div class="small" style="margin-bottom:6px;font-weight:700">${r.label ? esc(r.label) : '<span class="muted">이름 없음</span>'}${s.player && r.label && r.role !== 'ignore' && r.role !== 'par' ? ' <span class="badge">내 줄</span>' : ''}</div>
+      <div class="small" style="margin-bottom:6px;font-weight:700">${r.label ? esc(r.label) : '<span class="muted">이름 없음</span>'}${s.player && matchesName(r.label, s.player) && r.role !== 'ignore' && r.role !== 'par' ? ' <span class="badge">내 줄</span>' : ''}</div>
       <div class="rh">
         <select data-role="${ri}" aria-label="줄 ${ri + 1} 용도">${ROLES.map(([k, l]) => `<option value="${k}"${r.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
         ${nine ? `<select data-range="${ri}" aria-label="줄 ${ri + 1} 범위">${RANGES.map(([k, l]) => `<option value="${k}"${r.range === k ? ' selected' : ''}>${l}</option>`).join('')}</select>` : '<span class="muted small" style="align-self:center">18홀 전체</span>'}
@@ -224,8 +229,14 @@ function reviewHtml(s) {
     <div class="card" style="margin-top:12px">
       <div class="field"><label for="s-title">코스명 ${s.title ? '<span class="badge">사진에서 인식</span>' : '<span class="badge warn">직접 입력</span>'}</label>
         <input id="s-title" class="input" value="${esc(s.title)}" placeholder="코스 이름"></div>
+      <div class="two">
+        <div class="field"><label for="s-front">전반 코스 ${s.front ? '<span class="badge">인식</span>' : ''}</label>
+          <input id="s-front" class="input" value="${esc(s.front)}" placeholder="예: 동"></div>
+        <div class="field"><label for="s-back">후반 코스 ${s.back ? '<span class="badge">인식</span>' : ''}</label>
+          <input id="s-back" class="input" value="${esc(s.back)}" placeholder="예: 서"></div>
+      </div>
       <div class="two" style="margin-bottom:0">
-        <div class="field" style="margin-bottom:0"><label for="s-date">날짜 ${s.dateFound ? '<span class="badge">인식</span>' : '<span class="badge warn">오늘</span>'}</label>
+        <div class="field" style="margin-bottom:0"><label for="s-date">날짜 ${s.dateFound ? '<span class="badge">인식</span>' : '<span class="badge warn">직접 선택</span>'}</label>
           <input id="s-date" class="input" type="date" value="${esc(s.date)}"></div>
         <div class="field" style="margin-bottom:0"><label for="s-time">시간</label>
           <input id="s-time" class="input" type="time" value="${esc(s.time)}"></div>
