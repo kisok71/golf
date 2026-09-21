@@ -104,12 +104,13 @@ export function hbars(items, { wide = false, signedScale = false } = {}) {
   }).join('')}</div>`;
 }
 
-/** 홀별 평균(파 대비) 히트맵 - 셀에 항상 수치를 표기한다 */
-export function heatmap(holeStats) {
+/** 홀별 평균 히트맵 - 색은 파 대비, 셀에는 항상 수치를 표기한다. mode: 'diff'(파 대비) | 'strokes'(평균 타수) */
+export function heatmap(holeStats, mode = 'diff') {
   const cls = v => (v == null ? 'none' : v <= -0.5 ? 't-b2' : v < -0.15 ? 't-b1' : v < 0.25 ? 't-0' : v < 0.6 ? 't-r1' : v < 1.0 ? 't-r2' : v < 1.5 ? 't-r3' : 't-r4');
   const rows = [];
   for (let s = 0; s < holeStats.length; s += 9) rows.push(holeStats.slice(s, s + 9));
-  const cell = h => `<div class="cell ${cls(h.avg)}" data-tip="<b>${h.i + 1}번 홀 (파${h.par})</b><br>평균 ${h.avg == null ? '-' : signed(h.avg, 1)}타 · ${h.n}회${h.trouble ? `<br>OB·해저드 ${h.trouble}회` : ''}"><small>${h.i + 1}</small><b>${h.avg == null ? '–' : signed(h.avg, 1)}</b></div>`;
+  const val = h => (h.avg == null ? '–' : mode === 'strokes' ? (h.par + h.avg).toFixed(1) : signed(h.avg, 1));
+  const cell = h => `<div class="cell ${cls(h.avg)}" data-tip="<b>${h.i + 1}번 홀 (파${h.par})</b><br>평균 ${h.avg == null ? '-' : (h.par + h.avg).toFixed(2)}타 (${h.avg == null ? '-' : signed(h.avg, 2)}) · ${h.n}회${h.trouble ? `<br>OB·해저드 ${h.trouble}회` : ''}"><small>${h.i + 1}</small><b>${val(h)}</b><small>파${h.par ?? '-'}</small></div>`;
   return rows.map(r => `<div class="heat" style="margin-bottom:6px">${r.map(cell).join('')}</div>`).join('') +
     `<div class="heat-legend"><i class="t-b2"></i>잘 침 <i class="t-b1"></i><i class="t-0"></i><i class="t-r1"></i><i class="t-r2"></i><i class="t-r3"></i><i class="t-r4"></i>어려움</div>`;
 }
