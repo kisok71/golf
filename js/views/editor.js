@@ -6,6 +6,7 @@ import {
 } from '../util.js';
 import { toast, confirmDialog } from '../ui.js';
 import { openCoursePicker } from './coursepicker.js';
+import { openKgaPicker, kgaLookup, getSex } from './kgapicker.js';
 
 const DRAFT = 'gn.draft';
 const readDraft = () => { try { return JSON.parse(localStorage.getItem(DRAFT)); } catch { return null; } };
@@ -52,6 +53,7 @@ export async function mount(el, { id: rawId }) {
       ${st.resumed && !st.editing ? `<div class="banner">${ic('info', 18)}<span class="grow">작성 중이던 기록을 불러왔어요</span><button data-act="restart">새로 시작</button></div>` : ''}
       ${st.step === 'info' ? infoHtml() : holesHtml()}`;
     if (st.step === 'holes') el.querySelector('.strip .cur')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+    if (st.step === 'info') kgaHint();
   };
 
   const totals = s => `<div class="totals">
@@ -87,6 +89,8 @@ export async function mount(el, { id: rawId }) {
       <div class="card">
         <h2>코스 난이도 <span class="badge">선택</span></h2>
         <p class="hint">스코어카드나 골프장 안내에 적힌 값을 넣으면 핸디캡을 더 정확하게 추정해요. 한 번 입력하면 이 코스는 기억해요.</p>
+        <div id="kga-slot"></div>
+        <button class="btn soft block" data-act="kga" style="margin-bottom:14px">${ic('search')} KGA 공식 레이팅 불러오기</button>
         <div class="field"><label for="f-tee">티</label>
           <input id="f-tee" class="input" list="tee-list" placeholder="예: 화이트" value="${esc(rd.tee || '')}" autocomplete="off">
           <datalist id="tee-list">${teeNames().map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
@@ -201,6 +205,8 @@ export async function mount(el, { id: rawId }) {
       case 'restart': confirmDialog({ title: '새로 시작할까요?', message: '작성 중이던 내용은 사라져요.', ok: '새로 시작', danger: true }).then(ok => { if (ok) { clearDraft(); st = { round: newRound(), step: 'info', cur: 0, editing: false }; render(); } }); break;
       case 'scan': location.hash = '#/scan'; break;
       case 'search': searchCourse(); break;
+      case 'kga': openKgaPicker({ query: rd.course, front: rd.frontName, back: rd.backName, onApply: applyRating }); break;
+      case 'kga-avg': kgaLookup(rd.course).then(({ avg }) => applyRating({ est: true, rating: avg.rating, slope: avg.slope })).catch(() => toast('평균값을 불러오지 못했어요')); break;
       case 'weather': mut(() => (rd.weather = b.dataset.v)); break;
       case 'holes': mut(() => resizeRound(rd, Number(b.dataset.v))); if (st.cur >= rd.holes.length) mut(() => (st.cur = 0)); break;
       case 'par': mut(() => { const i = Number(b.dataset.i); rd.pars[i] = cyclePar(rd.pars[i]); }); break;
@@ -223,6 +229,46 @@ export async function mount(el, { id: rawId }) {
   el.onkeydown = e => {
     if (e.key === 'Enter' && e.target.id === 'f-course') { e.preventDefault(); e.target.blur(); searchCourse(); }
   };
+
+  /** KGA 자료(또는 평균 임시값)로 티·레이팅·슬로프를 채운다 */
+  function applyRating(x) {
+    const rd = r();
+    mut(() => {
+      rd.tee = x.est ? '' : x.tee;
+      rd.rating = x.rating; rd.slope = x.slope; rd.ratingEst = !!x.est;
+      // "동+서" 조합을 골랐고 전반/후반 코스 이름이 비어 있으면 함께 채운다
+      if (!x.est && rd.holes.length >= 18 && x.front && !(rd.frontName || '').trim() && !(rd.backName || '').trim()) { rd.frontName = x.front; rd.backName = x.back; }
+    });
+    toast(x.est ? `평균값(${x.rating.toFixed(1)} / ${x.slope})으로 임시 입력했어요. 정확한 값으로 고쳐주세요` : `레이팅 ${x.rating.toFixed(1)} / 슬로프 ${x.slope} 입력 (${x.club} ${x.course} ${x.tee})`, 3400);
+  }
+
+  /**
+   * 코스 난이도 카드의 안내. KGA에 등록된 코스면 불러오라고 알려주고,
+   * 자료가 없는 코스면(코스마다 한 번) 평균 레이팅·슬로프를 임시로 채운다. 값을 직접 고치면 임시 표시가 사라진다.
+   */
+  let kgaTok = 0;
+  function kgaHint() {
+    const slot = el.querySelector('#kga-slot');
+    if (!slot) return;
+    const rd = r(), tok = ++kgaTok, name = rd.course.trim();
+    slot.innerHTML = '';
+    if (!name || rd.holes.length < 18 || (rd.rating != null && !rd.ratingEst)) return;
+    kgaLookup(name, getSex()).then(({ found, avg }) => {
+      const s2 = el.querySelector('#kga-slot');
+      if (tok !== kgaTok || !s2 || r() !== rd) return;
+      const ok = t => `<div class="banner">${ic('check', 18)}<span class="grow">${t}</span></div>`;
+      if (found) {
+        s2.innerHTML = ok(rd.ratingEst ? `KGA에 등록된 코스예요 (${esc(found)}). 임시 평균값 대신 아래 버튼으로 정확한 값을 불러오세요.` : `KGA에 등록된 코스예요 (${esc(found)}). 아래 버튼으로 레이팅·슬로프를 불러오세요.`);
+        return;
+      }
+      if (rd.rating == null && st.kgaFor !== name) {
+        st.kgaFor = name;
+        applyRating({ est: true, rating: avg.rating, slope: avg.slope });
+        return;
+      }
+      if (rd.ratingEst) s2.innerHTML = `<div class="banner" style="background:color-mix(in srgb,#eda100 18%,transparent);color:var(--ink)">${ic('info', 18)}<span class="grow">KGA 자료에 없는 코스라 평균값으로 임시 입력했어요. 아는 값으로 고쳐주세요.</span></div>`;
+    }).catch(() => { /* 자료를 못 불러와도 입력은 계속 가능 */ });
+  }
 
   function searchCourse() {
     openCoursePicker({
@@ -266,6 +312,7 @@ export async function mount(el, { id: rawId }) {
   // "동-서" 처럼 하이픈으로 쓰면 전반/후반 코스로 나눈다 (입력을 마친 뒤 적용)
   el.onchange = e => {
     const t = e.target, rd = r();
+    if (t.id === 'f-course') kgaHint();
     if (t.id !== 'f-course' && t.id !== 'f-front') return;
     const sp = splitNines(t.value);
     if (!sp || (t.id === 'f-course' && !sp.rest)) return;
@@ -315,14 +362,14 @@ export async function mount(el, { id: rawId }) {
       rd.tee = t.value;
       const tee = courseRec()?.tees?.find(x => x.name === t.value.trim() && x.holes === rd.holes.length);
       if (tee && (rd.rating !== tee.rating || rd.slope !== tee.slope)) {
-        rd.rating = tee.rating; rd.slope = tee.slope;
+        rd.rating = tee.rating; rd.slope = tee.slope; rd.ratingEst = false;
         persist(); render();
         el.querySelector('#f-tee')?.focus();
         toast(`${tee.name || '저장된'} 티의 레이팅·슬로프를 불러왔어요`);
         return;
       }
-    } else if (t.id === 'f-rating') rd.rating = t.value === '' ? null : Number(t.value);
-    else if (t.id === 'f-slope') rd.slope = t.value === '' ? null : Number(t.value);
+    } else if (t.id === 'f-rating') { rd.rating = t.value === '' ? null : Number(t.value); rd.ratingEst = false; }
+    else if (t.id === 'f-slope') { rd.slope = t.value === '' ? null : Number(t.value); rd.ratingEst = false; }
     else if (t.id === 'f-temp') rd.temp = t.value === '' ? null : Number(t.value);
     else if (t.id === 'f-memo') rd.memo = t.value;
     persist();

@@ -185,9 +185,10 @@ export function estimateHandicap(all) {
   const n = last.length;
   const diffs = last.map(x => differential(x.r, x.s));
   const rated = diffs.filter(d => d != null).length;
-  if (n < 3) return { index: null, n, used: 0, adj: 0, rated };
+  const est = last.filter((x, i) => diffs[i] != null && x.r.ratingEst).length;
+  if (n < 3) return { index: null, n, used: 0, adj: 0, rated, est };
   const [, take, adj] = WHS_TABLE.find(([max]) => n <= max);
   const sorted = last.map((x, i) => diffs[i] ?? x.s.diff).sort((p, q) => p - q);
   const idx = mean(sorted.slice(0, take)) + adj;
-  return { index: Math.min(54, Math.round(idx * 10) / 10), n, used: take, adj, rated };
+  return { index: Math.min(54, Math.round(idx * 10) / 10), n, used: take, adj, rated, est };
 }

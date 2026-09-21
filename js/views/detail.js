@@ -48,7 +48,7 @@ export async function mount(el, { id }) {
       ${r.time ? `<span>${ic('clock', 16)} ${r.time} 티오프</span>` : ''}
       <span>${weatherIcon(r.weather)} ${weatherLabel(r.weather)}${r.temp != null ? ` · ${r.temp}°C` : ''}</span>
       <span>${ic('flag', 16)} ${r.holes.length}홀 · 파 ${s.parTotal}</span>
-      ${r.rating != null && r.slope != null ? `<span>${ic('target', 16)} ${r.tee ? `${esc(r.tee)} · ` : ''}레이팅 ${r.rating} / 슬로프 ${r.slope}${diff != null ? ` · 핸디캡 차이 ${diff.toFixed(1)}` : ''}</span>` : ''}
+      ${r.rating != null && r.slope != null ? `<span>${ic('target', 16)} ${r.tee ? `${esc(r.tee)} · ` : ''}레이팅 ${r.rating} / 슬로프 ${r.slope}${r.ratingEst ? ' (평균 임시값)' : ''}${diff != null ? ` · 핸디캡 차이 ${diff.toFixed(1)}` : ''}</span>` : ''}
       ${nineName(r, 0) || nineName(r, 1) ? `<span>${ic('pin', 16)} ${esc(nineName(r, 0) || '전반')}${r.holes.length >= 18 ? ` → ${esc(nineName(r, 1) || '후반')}` : ''}</span>` : ''}
     </div>
     ${s.complete ? '' : `<div class="info"><span class="badge warn">${s.filled}/${s.n}홀 입력됨 · 미완료 라운드는 분석에서 제외돼요</span></div>`}

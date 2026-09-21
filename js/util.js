@@ -145,7 +145,7 @@ export function courseRecord(existing, rd) {
   // 티(블루/화이트 등)별 레이팅·슬로프도 함께 기억한다 (같은 티·같은 홀 수는 최신 값으로 덮어씀)
   const tee = String(rd.tee || '').trim(), n = rd.holes.length;
   const tees = (existing?.tees || []).filter(t => !(t.name === tee && t.holes === n));
-  if (validRating(rd.rating) && validSlope(rd.slope)) tees.push({ name: tee, holes: n, rating: rd.rating, slope: rd.slope });
+  if (!rd.ratingEst && validRating(rd.rating) && validSlope(rd.slope)) tees.push({ name: tee, holes: n, rating: rd.rating, slope: rd.slope });
   return { ...(existing || {}), name: rd.course, pars: rd.pars, holes: n, front: f, back: b, nines: [...nines].map(([name, pars]) => ({ name, pars })), tees, lastTee: tee };
 }
 
