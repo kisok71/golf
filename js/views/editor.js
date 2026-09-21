@@ -7,6 +7,7 @@ import {
 import { toast, confirmDialog } from '../ui.js';
 import { openCoursePicker } from './coursepicker.js';
 import { openKgaPicker, kgaLookup, getSex } from './kgapicker.js';
+import { KGA_CALC_URL } from '../kga.js';
 
 const DRAFT = 'gn.draft';
 const readDraft = () => { try { return JSON.parse(localStorage.getItem(DRAFT)); } catch { return null; } };
@@ -266,7 +267,7 @@ export async function mount(el, { id: rawId }) {
         applyRating({ est: true, rating: avg.rating, slope: avg.slope });
         return;
       }
-      if (rd.ratingEst) s2.innerHTML = `<div class="banner" style="background:color-mix(in srgb,#eda100 18%,transparent);color:var(--ink)">${ic('info', 18)}<span class="grow">KGA 자료에 없는 코스라 평균값으로 임시 입력했어요. 아는 값으로 고쳐주세요.</span></div>`;
+      if (rd.ratingEst) s2.innerHTML = `<div class="banner" style="background:color-mix(in srgb,#eda100 18%,transparent);color:var(--ink)">${ic('info', 18)}<span class="grow">앱의 KGA 자료에 없는 코스라 평균값으로 임시 입력했어요. KGA 사이트에서 찾은 값으로 고쳐주세요. 거기에도 없으면 이 평균값을 그대로 쓰세요.</span><a href="${KGA_CALC_URL}" target="_blank" rel="noopener noreferrer">KGA 사이트 검색 ↗</a></div>`;
     }).catch(() => { /* 자료를 못 불러와도 입력은 계속 가능 */ });
   }
 

@@ -1,7 +1,7 @@
 import { ic } from '../icons.js';
 import { esc } from '../util.js';
 import { sheet } from '../ui.js';
-import { loadKga, searchClubs, rankCombos, teesOf, averages } from '../kga.js';
+import { loadKga, searchClubs, rankCombos, teesOf, averages, KGA_CALC_URL } from '../kga.js';
 
 const SEX = 'gn.gender';
 export const getSex = () => { try { return localStorage.getItem(SEX) === '1' ? 1 : 0; } catch { return 0; } };
@@ -25,8 +25,9 @@ export function openKgaPicker({ query = '', front = '', back = '', onApply }) {
       <div class="field"><input id="kga-q" class="input" placeholder="골프장 이름 (예: 화성상록)" value="${esc(q)}" autocomplete="off"></div>
       <div id="kga-res"></div>
       <div class="divider"></div>
-      <p class="small muted" style="margin:0 0 8px">목록에 없는 골프장이면 평균값으로 임시 입력할 수 있어요. 나중에 정확한 값으로 고치세요.</p>
-      <button class="btn secondary block" data-a="avg" style="min-height:44px">평균값으로 임시 입력</button>`;
+      <p class="small muted" style="margin:0 0 8px">목록에 없는 골프장이면 <b>KGA 사이트</b>의 핸디캡 계산기에서 찾아보세요. 거기에도 없으면 평균값으로 임시 입력할 수 있어요.</p>
+      <div class="btns" style="margin-top:0"><a class="btn secondary" href="${KGA_CALC_URL}" target="_blank" rel="noopener noreferrer">KGA 사이트에서 검색 ↗</a>
+        <button class="btn secondary" data-a="avg">평균값으로 임시 입력</button></div>`;
   };
 
   const tag = t => `<span class="badge">${t}</span>`;
@@ -54,7 +55,7 @@ export function openKgaPicker({ query = '', front = '', back = '', onApply }) {
     const found = searchClubs(data, q, 8);
     box.innerHTML = found.length
       ? `<div class="list">${found.map((m, i) => `<button class="li" data-club="${i}"><span class="ico">${ic('flag')}</span><div class="grow"><b>${esc(m.club.name)}</b><div class="small muted">코스 조합 ${new Set(m.club.rows.map(r => r.course)).size}개</div></div>${ic('chev')}</button>`).join('')}</div>`
-      : `<div class="banner" style="background:color-mix(in srgb,#eda100 18%,transparent);color:var(--ink)">${ic('info', 18)}<span class="grow">“${esc(q)}”는 KGA 자료에 없어요. 아래 <b>평균값으로 임시 입력</b>을 쓰거나 직접 입력하세요.</span></div>`;
+      : `<div class="banner" style="background:color-mix(in srgb,#eda100 18%,transparent);color:var(--ink)">${ic('info', 18)}<span class="grow">“${esc(q)}” 검색 결과가 앱에 들어 있는 KGA 자료에 없어요. 아래 <b>KGA 사이트에서 검색</b>해 보고, 거기에도 없으면 <b>평균값으로 임시 입력</b>하세요.</span></div>`;
     box._found = found;
   };
 

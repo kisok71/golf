@@ -445,3 +445,5 @@ table.sc th.rl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 .tee-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr 72px 30px; gap: 6px; margin-bottom: 6px; align-items: center; }
 .tee-row .input { min-height: 44px; padding: 0 8px; min-width: 0; }
 .tee-row select.input { appearance: auto; }
+
+.banner a { font-weight: 700; text-decoration: underline; color: inherit; white-space: nowrap; }

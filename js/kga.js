@@ -1,6 +1,9 @@
 /* 대한골프협회(KGA) 코스레이팅 현황 데이터 (data/kga-ratings.json, tools/build-ratings.py로 생성)를
  * 검색하는 모듈. 앱에 포함된 파일을 읽으므로 인터넷 없이 동작한다. */
 
+/** KGA 핸디캡 계산기 페이지 — 앱 자료에 없는 골프장은 여기서 코스레이팅·슬로프를 찾아볼 수 있다 */
+export const KGA_CALC_URL = 'https://www.kgagolf.or.kr/web/handicap/calculator';
+
 let cache = null;
 
 /** JSON을 골프장 이름 정규화 키와 함께 색인한다 (테스트에서도 직접 쓸 수 있게 분리) */
