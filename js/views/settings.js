@@ -1,8 +1,9 @@
 import { db } from '../db.js';
 import { ic } from '../icons.js';
 import { pageHead, toast, confirmDialog, sheet } from '../ui.js';
-import { downloadFile, todayStr } from '../util.js';
+import { downloadFile, todayStr, esc } from '../util.js';
 import { loadSamples } from '../sample.js';
+import { getPlayer, setPlayer } from './scan.js';
 
 const THEME = 'gn.theme';
 export function applyTheme() {
@@ -45,6 +46,11 @@ export async function mount(el) {
       ${[['auto', '시스템'], ['light', '라이트'], ['dark', '다크']].map(([k, l]) => `<button data-theme="${k}" class="${theme === k ? 'on' : ''}">${l}</button>`).join('')}
     </div></div>
 
+    <div class="section-title"><span>스코어카드 인식</span></div>
+    <div class="card"><div class="field" style="margin-bottom:0"><label for="p-name">내 이름</label>
+      <input id="p-name" class="input" placeholder="스코어카드에 표시되는 이름" value="${esc(getPlayer())}" autocomplete="off">
+      <span class="small muted">사진에 여러 명이 있을 때 이 이름의 줄만 자동으로 골라요.</span></div></div>
+
     <div class="section-title"><span>내 데이터 · ${rounds.length}라운드</span></div>
     <div class="card"><p class="hint" style="margin-bottom:12px">모든 기록은 <b>이 기기 안</b>에만 저장돼요. 기기를 바꾸거나 브라우저 데이터를 지우기 전에 꼭 백업하세요.</p>
       <div class="grid-2">
@@ -80,6 +86,7 @@ export async function mount(el) {
     }
   };
   el.onchange = async e => {
+    if (e.target.id === 'p-name') { setPlayer(e.target.value.trim()); toast('저장했어요'); return; }
     if (e.target.id !== 'import') return;
     const file = e.target.files[0];
     if (!file) return;
