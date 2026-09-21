@@ -1,7 +1,7 @@
 import { ic } from '../icons.js';
-import { esc, newRound, DEFAULT_PARS, todayStr, sum, defaultPutts } from '../util.js';
+import { esc, newRound, DEFAULT_PARS, todayStr, sum, defaultPutts, splitNines } from '../util.js';
 import { loadBitmap, preprocess, recognize, thumbnail, ocrLabels } from '../ocr.js';
-import { parseScorecard, chunkSums, matchesName, selectMyRows } from '../scorecard.js';
+import { parseScorecard, chunkSums, matchesName, selectMyRows, dropOthers } from '../scorecard.js';
 import { pageHead, toast } from '../ui.js';
 import { setDraft } from './editor.js';
 
@@ -120,6 +120,7 @@ export async function mount(el) {
           cands.forEach((r, i) => { r.labelAlt = labels[i] || ''; });
           parsed.matchedBy = selectMyRows(parsed.rows, { player, aliases, playerIdx });
           parsed.playerMatched = parsed.matchedBy === 'name';
+          parsed.rows = dropOthers(parsed.rows, parsed.matchedBy);
         } catch (e) { console.warn('이름 재인식 실패', e); }
       }
       state = {
@@ -143,9 +144,16 @@ export async function mount(el) {
     else if (t.matches('[data-cell]')) draw();
     else if (t.id === 's-date') state.date = t.value;
     else if (t.id === 's-time') state.time = t.value;
-    else if (t.id === 's-title') state.title = t.value.trim();
-    else if (t.id === 's-front') state.front = t.value.trim();
-    else if (t.id === 's-back') state.back = t.value.trim();
+    else if (t.id === 's-title') {
+      // "화성상록 동-서" 처럼 쓰면 골프장 이름과 전반/후반 코스로 나눈다
+      const sp = splitNines(t.value);
+      if (sp && sp.rest) { state.title = sp.rest; state.front = sp.front; state.back = sp.back; toast(`코스를 나눴어요 (전반 ${sp.front} · 후반 ${sp.back})`); draw(); }
+      else state.title = t.value.trim();
+    } else if (t.id === 's-front') {
+      const sp = splitNines(t.value);
+      if (sp) { state.front = sp.front; state.back = sp.back; toast(`코스를 나눴어요 (전반 ${sp.front} · 후반 ${sp.back})`); draw(); }
+      else state.front = t.value.trim();
+    } else if (t.id === 's-back') state.back = t.value.trim();
   };
   el.oninput = e => {
     const t = e.target;
@@ -279,7 +287,7 @@ function reviewHtml(s) {
         <input id="s-title" class="input" value="${esc(s.title)}" placeholder="코스 이름"></div>
       <div class="two">
         <div class="field"><label for="s-front">전반 코스 ${s.front ? '<span class="badge">인식</span>' : ''}</label>
-          <input id="s-front" class="input" value="${esc(s.front)}" placeholder="예: 동"></div>
+          <input id="s-front" class="input" value="${esc(s.front)}" placeholder="예: 동 (또는 동-서)"></div>
         <div class="field"><label for="s-back">후반 코스 ${s.back ? '<span class="badge">인식</span>' : ''}</label>
           <input id="s-back" class="input" value="${esc(s.back)}" placeholder="예: 서"></div>
       </div>

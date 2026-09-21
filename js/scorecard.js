@@ -1,4 +1,4 @@
-import { sum } from './util.js';
+import { sum, splitNines } from './util.js';
 
 /* 스코어카드 OCR 결과(단어 목록)를 해석하는 순수 로직. DOM에 의존하지 않는다. */
 
@@ -192,6 +192,15 @@ function pickRows(rows, { player = '', aliases = [], playerIdx = null } = {}) {
 }
 
 /**
+ * 내 줄을 이름(또는 기억한 위치)으로 확실히 찾았다면, 다른 플레이어의 줄은 인식 결과에서 아예 뺀다.
+ * 찾지 못한 경우에는 사용자가 직접 고를 수 있도록 모든 후보 줄을 남긴다.
+ */
+export function dropOthers(rows, matchedBy) {
+  if (matchedBy !== 'name' && matchedBy !== 'index') return rows;
+  return rows.filter(r => r.role !== 'ignore');
+}
+
+/**
  * 스코어카드 파싱: 숫자 행을 찾아 파 / 스코어 / 스코어(파 대비) / 퍼팅 / 무시로 추정한다.
  * 파 대비 스코어는 0=파, 1=보기, -1=버디이며, 소계(합계 칸)가 (칸 합 + 그 9홀의 파 합계)에 가까우면 그렇게 본다.
  * 숫자 한두 개를 잘못 읽어도 합계가 크게 다르지 않도록 ±3까지 허용한다.
@@ -253,7 +262,7 @@ export function parseScorecard(data, { player = '', aliases = [], playerIdx = nu
   }
 
   const matchedBy = selectMyRows(out, { player, aliases, playerIdx });
-  return { rows: out, playerMatched: matchedBy === 'name', matchedBy, ...findMeta(data.text || '', { player }) };
+  return { rows: dropOthers(out, matchedBy), playerMatched: matchedBy === 'name', matchedBy, ...findMeta(data.text || '', { player }) };
 }
 
 /** 화면 제목·버튼처럼 골프장 이름이 아닌 문구 */
@@ -278,23 +287,26 @@ export function findMeta(text, { player = '' } = {}) {
   const holeAt = lines.findIndex(l => /\bHOLE\b/i.test(l));
   const head = lines.slice(0, holeAt > 0 ? holeAt : Math.min(lines.length, 12));
 
+  // 전반-후반 9홀 코스 이름("동-서")을 먼저 떼어내고, 남은 글자에서 골프장 이름을 찾는다.
+  // 같은 줄에 "화성상록 동-서"처럼 함께 있어도 나뉜다.
+  let front = '', back = '';
+  const rest = head.map(ln => {
+    if (front) return ln;
+    const sp = splitNines(ln);
+    if (!sp || NOT_TITLE.test(sp.front + sp.back)) return ln;
+    front = sp.front; back = sp.back;
+    return sp.rest;
+  });
+
   // 골프장 이름: 화면 제목·버튼·내 이름을 뺀 첫 한글 덩어리
   let title = '';
-  outer: for (const ln of head) {
+  outer: for (const ln of rest) {
     for (const run of ln.match(/[가-힣][가-힣\s]*[가-힣]/g) || []) {
       const r = run.replace(/\s+/g, '');
       if (r.length < 2 || NOT_TITLE.test(r) || (player && matchesName(r, player))) continue;
       title = r;
       break outer;
     }
-  }
-
-  // 전반/후반 9홀 코스 이름: "동-서" 처럼 한글 두 덩어리가 구분 기호로만 이어진 줄
-  let front = '', back = '';
-  for (const ln of head) {
-    const t = ln.replace(/[^가-힣\-–—~→]/g, '');
-    const m = t.match(/^([가-힣]{1,4})[-–—~→]([가-힣]{1,4})$/);
-    if (m) { front = m[1]; back = m[2]; break; }
   }
   return { date, time, title, front, back };
 }

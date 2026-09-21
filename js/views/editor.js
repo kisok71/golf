@@ -2,7 +2,7 @@ import { db } from '../db.js';
 import { ic } from '../icons.js';
 import {
   esc, newRound, resizeRound, summarize, signed, clamp, sum, WEATHER, weatherIcon, scoreName, tClass,
-  parGridHtml, cyclePar, todayStr, courseRecord, defaultPutts
+  parGridHtml, cyclePar, todayStr, courseRecord, defaultPutts, splitNines
 } from '../util.js';
 import { toast, confirmDialog } from '../ui.js';
 import { openCoursePicker } from './coursepicker.js';
@@ -229,6 +229,31 @@ export async function mount(el, { id: rawId }) {
       }
     });
   }
+
+  /** 저장된 9홀 코스 이름과 같으면 그 코스의 파를 해당 9홀에 채운다 */
+  function fillNinePars(rd) {
+    let filled = false;
+    [[0, rd.frontName], [1, rd.backName]].forEach(([half, name]) => {
+      const nine = name && courseRec()?.nines?.find(n => n.name === String(name).trim());
+      const at = half * 9;
+      if (nine && rd.holes.length >= at + 9) nine.pars.forEach((p, i) => { if (rd.pars[at + i] !== p) { rd.pars[at + i] = p; filled = true; } });
+    });
+    return filled;
+  }
+
+  // "동-서" 처럼 하이픈으로 쓰면 전반/후반 코스로 나눈다 (입력을 마친 뒤 적용)
+  el.onchange = e => {
+    const t = e.target, rd = r();
+    if (t.id !== 'f-course' && t.id !== 'f-front') return;
+    const sp = splitNines(t.value);
+    if (!sp || (t.id === 'f-course' && !sp.rest)) return;
+    if (t.id === 'f-course') rd.course = sp.rest;
+    rd.frontName = sp.front;
+    if (rd.holes.length >= 18) rd.backName = sp.back;
+    const filled = fillNinePars(rd);
+    persist(); render();
+    toast(rd.holes.length >= 18 ? `코스를 나눴어요 (전반 ${sp.front} · 후반 ${sp.back})${filled ? ' · 저장된 파를 불러왔어요' : ''}` : `9홀 코스 이름: ${sp.front}`);
+  };
 
   el.oninput = e => {
     const rd = r(), t = e.target;

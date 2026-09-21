@@ -95,6 +95,19 @@ export function summarize(r) {
 /** 스코어를 입력했을 때 퍼팅의 기본값: 2 (홀인원은 0, 2타 이하로 끝난 홀은 스코어-1). 나중에 홀별로 수정한다 */
 export const defaultPutts = score => (score == null ? null : score <= 1 ? 0 : Math.min(2, score - 1));
 
+/**
+ * "동-서" 처럼 하이픈으로 이어진 전반-후반 9홀 코스 이름을 나눈다.
+ * OCR이 '-'를 'ㅡ' '—' '~' 등으로 읽는 경우도 받아들인다. "화성상록 동-서"처럼 골프장 이름이 함께 있으면 rest에 남긴다.
+ * 반환: { front, back, rest } 또는 null
+ */
+export function splitNines(text) {
+  // 앞뒤에 다른 한글이 붙어 있으면(예: "화성상록동-서") 어디까지가 코스 이름인지 알 수 없으므로 나누지 않는다
+  const m = String(text ?? '').match(/(^|[^가-힣])([가-힣]{1,4})\s*[-–—−~→ㅡ‐‑_]\s*([가-힣]{1,4})(?![가-힣])/);
+  if (!m) return null;
+  const rest = String(text).replace(m[0], m[1] + ' ').replace(/[()\[\]{}]/g, ' ').replace(/\s+/g, ' ').trim();
+  return { front: m[2], back: m[3], rest };
+}
+
 /** 라운드의 전반(0)/후반(1) 9홀 코스 이름 */
 export const nineName = (r, half) => String((half === 0 ? r.frontName : r.backName) || '').trim();
 
