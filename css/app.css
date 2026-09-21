@@ -433,3 +433,11 @@ table.sc th.rl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 .holelink { color: inherit; text-decoration: underline dotted; text-underline-offset: 3px; display: block; padding: 4px 0; }
 
 .cells input.fixed { border-color: var(--brand); background: var(--brand-soft); }
+
+/* 대시보드 대표 카드: 평균 타수 옆 추정 핸디캡 */
+.kpi .value-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.hcp { flex: none; text-align: center; padding: 8px 14px 9px; border-radius: 16px; background: rgba(255, 255, 255, .14); border: 1px solid rgba(255, 255, 255, .18); position: relative; z-index: 1; cursor: default; }
+.hcp small { display: block; font-size: 11.5px; font-weight: 600; color: rgba(255, 255, 255, .78); line-height: 1.3; }
+.hcp b { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; color: #e3f8a0; }
+.hcp.dim b { color: rgba(255, 255, 255, .7); }
+@media (max-width: 360px) { .hcp b { font-size: 26px; } .hcp { padding: 6px 10px 7px; } }

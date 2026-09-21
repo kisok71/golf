@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { ic } from '../icons.js';
-import { analyze, analyzeNines, rangeLabel } from '../stats.js';
+import { analyze, analyzeNines, estimateHandicap, rangeLabel } from '../stats.js';
 import { trendChart, penaltyChart, distBar, stackBar, hbars, heatmap } from '../charts.js';
 import { esc, f1, signed, fmtShort, weatherLabel, summarize, expandNines, nineName } from '../util.js';
 import { pageHead, newRoundSheet } from '../ui.js';
@@ -20,7 +20,7 @@ export async function mount(el) {
 
   const draw = () => {
     const s = analyze(rounds, filters);
-    el.innerHTML = pageHead({ title: '스코어 분석', sub: greeting(), right: '' }) + filterBar(filters, courses, s) + (s.empty ? emptyFiltered(rounds) : body(s, { heat: heatCard(rounds, saved, filters), nine: nineCard(rounds, filters) }));
+    el.innerHTML = pageHead({ title: '스코어 분석', sub: greeting(), right: '' }) + filterBar(filters, courses, s) + (s.empty ? emptyFiltered(rounds) : body(s, { heat: heatCard(rounds, saved, filters), nine: nineCard(rounds, filters), hcp: estimateHandicap(rounds) }));
     if (s.empty) return;
   };
   draw();
@@ -88,12 +88,23 @@ const trendBadge = t => {
   return `<span class="trend ${v < 0 ? 'good' : 'bad'}">${v < 0 ? '▼' : '▲'} ${Math.abs(v).toFixed(1)}타 ${v < 0 ? '개선' : '증가'}</span>`;
 };
 
-function body(s, { heat, nine }) {
+/** 핸디캡 표기: 0 미만(플러스 핸디캡)은 +2.1 처럼 */
+const fmtHcp = v => (v < 0 ? `+${Math.abs(v).toFixed(1)}` : v.toFixed(1));
+
+function hcpBadge(h) {
+  if (h.index == null) {
+    return `<div class="hcp dim" data-tip="<b>추정 핸디캡</b><br>18홀을 끝까지 기록한 라운드가 3회 이상 있으면 계산해요."><small>추정 핸디캡</small><b>–</b><small>18홀 ${h.n}/3회</small></div>`;
+  }
+  const how = `최근 ${h.n}개 18홀 라운드 중 파 대비가 좋은 ${h.used}개의 평균${h.adj ? ` ${h.adj > 0 ? '+' : ''}${h.adj.toFixed(1)}` : ''}`;
+  return `<div class="hcp" data-tip="<b>추정 핸디캡</b><br>${how}<br>코스 레이팅·슬로프를 반영하지 않은 간이 계산이라 공식 핸디캡과 다를 수 있어요."><small>추정 핸디캡</small><b>${fmtHcp(h.index)}</b></div>`;
+}
+
+function body(s, { heat, nine, hcp }) {
   const p = s.putts;
   const kpis = `<div class="kpis">
     <div class="card kpi hero">
       <div class="label">평균 타수 · ${s.mode}홀 ${s.n}라운드</div>
-      <div class="value num">${f1(s.avg)}<small>타</small></div>
+      <div class="value-row"><div class="value num">${f1(s.avg)}<small>타</small></div>${hcpBadge(hcp)}</div>
       <div class="foot"><span>파 대비 ${signed(s.avgDiff, 1)}</span>${trendBadge(s.trend)}${s.trend != null ? '<span>(최근 5 vs 이전 5)</span>' : ''}</div>
     </div>
     <div class="card kpi"><div class="label">베스트</div><div class="value num">${s.best.score}<small>타</small></div>

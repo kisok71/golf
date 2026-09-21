@@ -168,3 +168,23 @@ export function analyzeNines(all, { period = 'all', course = 'all' } = {}) {
   return [...groups.values()].map(g => ({ course: g.course, nine: g.nine, n: g.scores.length, avg: mean(g.scores), diff: mean(g.diffs), best: Math.min(...g.scores) }))
     .sort((a, b) => a.diff - b.diff);
 }
+
+/* WHS(세계 핸디캡 시스템)의 라운드 수별 산정표: [라운드 수 상한, 반영할 좋은 라운드 수, 조정값] */
+const WHS_TABLE = [[3, 1, -2], [4, 1, -1], [5, 1, 0], [6, 2, -1], [8, 2, 0], [11, 3, 0], [14, 4, 0], [16, 5, 0], [18, 6, 0], [19, 7, 0], [20, 8, 0]];
+
+/**
+ * 추정 핸디캡. WHS 방식을 간이로 계산한다:
+ * 완성된 18홀 라운드의 최근 20개에서 (스코어 - 파)가 좋은 라운드들의 평균 (3라운드부터).
+ * 코스 레이팅·슬로프를 몰라 파를 기준으로 삼으므로 공식 핸디캡과는 차이가 날 수 있다.
+ * 반환: { index(없으면 null), n(사용 가능한 18홀 라운드 수), used, adj }
+ */
+export function estimateHandicap(all) {
+  const rs = sortRounds(all).map(r => summarize(r)).filter(s => s.complete && s.n === 18);
+  const last = rs.slice(-20);
+  const n = last.length;
+  if (n < 3) return { index: null, n, used: 0, adj: 0 };
+  const [, take, adj] = WHS_TABLE.find(([max]) => n <= max);
+  const diffs = last.map(x => x.diff).sort((a, b) => a - b);
+  const idx = mean(diffs.slice(0, take)) + adj;
+  return { index: Math.min(54, Math.round(idx * 10) / 10), n, used: take, adj };
+}
