@@ -62,7 +62,10 @@ export async function loadSamples(count = 22) {
       let putts = diff <= -1 ? 1 : rand() < 0.11 ? 3 : rand() < 0.12 ? 1 : 2;
       if (diff >= 3 && rand() < 0.3) putts = 3;
       putts = Math.max(0, Math.min(putts, score - 1));
-      return { score, putts, ob, hazard };
+      // 티샷 결과: 스코어가 좋은 홀일수록 페어웨이 안착(파4·5) · 온그린(파3)했을 확률이 높게
+      const p = par >= 4 ? (diff <= 0 ? 0.75 : diff === 1 ? 0.6 : 0.4) : (diff <= 0 ? 0.7 : diff === 1 ? 0.45 : 0.2);
+      const teeShot = rand() < p ? 1 : 0;
+      return { score, putts, ob, hazard, teeShot };
     });
     rounds.push({
       id: uid() + k, date: dateStr(d), time: TIMES[Math.floor(rand() * TIMES.length)], course: course.name,

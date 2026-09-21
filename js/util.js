@@ -64,7 +64,7 @@ export function newRound(n = 18) {
   return {
     id: uid(), date: todayStr(), time: nowTime(), course: '', weather: 'sunny', temp: null,
     pars: DEFAULT_PARS.slice(0, n),
-    holes: Array.from({ length: n }, () => ({ score: null, putts: null, ob: 0, hazard: 0 })),
+    holes: Array.from({ length: n }, () => ({ score: null, putts: null, ob: 0, hazard: 0, teeShot: null })),
     tee: '', rating: null, slope: null, memo: '', createdAt: Date.now()
   };
 }
@@ -72,7 +72,7 @@ export function resizeRound(r, n) {
   if (r.holes.length === n) return;
   if (n < r.holes.length) { r.holes.length = n; r.pars.length = n; return; }
   while (r.holes.length < n) {
-    r.holes.push({ score: null, putts: null, ob: 0, hazard: 0 });
+    r.holes.push({ score: null, putts: null, ob: 0, hazard: 0, teeShot: null });
     r.pars.push(DEFAULT_PARS[r.pars.length] ?? 4);
   }
 }
@@ -82,14 +82,18 @@ export const sortRounds = a => [...a].sort((x, y) => (roundKey(x) < roundKey(y) 
 
 export function summarize(r) {
   const n = r.holes.length;
-  let score = 0, par = 0, putts = 0, puttsN = 0, ob = 0, hz = 0, filled = 0, gir = 0, girN = 0;
+  let score = 0, par = 0, putts = 0, puttsN = 0, ob = 0, hz = 0, filled = 0, gir = 0, girN = 0, fwHit = 0, fwN = 0, p3Hit = 0, p3N = 0;
   r.holes.forEach((h, i) => {
     ob += h.ob || 0; hz += h.hazard || 0;
+    // 티샷 결과: 파4·5는 페어웨이 안착, 파3는 온그린
+    if (h.teeShot != null) {
+      if (r.pars[i] >= 4) { fwN++; if (h.teeShot === 1) fwHit++; } else { p3N++; if (h.teeShot === 1) p3Hit++; }
+    }
     if (h.score == null) return;
     filled++; score += h.score; par += r.pars[i];
     if (h.putts != null) { puttsN++; putts += h.putts; girN++; if (h.score - h.putts <= r.pars[i] - 2) gir++; }
   });
-  return { n, score, par, diff: score - par, putts, puttsN, ob, hz, filled, complete: filled === n, gir, girN, parTotal: sum(r.pars) };
+  return { n, score, par, diff: score - par, putts, puttsN, ob, hz, filled, complete: filled === n, gir, girN, fwHit, fwN, p3Hit, p3N, parTotal: sum(r.pars) };
 }
 
 /** 스코어를 입력했을 때 퍼팅의 기본값: 2 (홀인원은 0, 2타 이하로 끝난 홀은 스코어-1). 나중에 홀별로 수정한다 */

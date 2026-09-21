@@ -22,6 +22,8 @@ function nineTable(r, from) {
   const sc = sum(played.map(h => h.score));
   const putted = hs.filter(h => h.putts != null);
   const row = (label, fn, total) => `<tr><th class="rl">${label}</th>${idx.map(fn).join('')}<td class="tot">${total}</td></tr>`;
+  const tsIdx = idx.filter(i => r.holes[i].teeShot != null);
+  const tsHit = tsIdx.filter(i => r.holes[i].teeShot === 1).length;
   const label = from === 0 ? (r.holes.length === 9 ? 'TOTAL' : 'OUT') : 'IN';
   return `<div class="sc-wrap"><table class="sc">
     <thead><tr><th class="rl" title="${esc(nineName(r, from / 9))}">${esc(nineName(r, from / 9)) || '홀'}</th>${idx.map(i => `<th><a class="holelink" href="#/edit/${r.id}?hole=${i}" aria-label="${i + 1}번 홀 수정">${i + 1}</a></th>`).join('')}<th class="tot">${label}</th></tr></thead>
@@ -31,6 +33,7 @@ function nineTable(r, from) {
       ${row('퍼팅', i => `<td>${r.holes[i].putts ?? '–'}</td>`, putted.length ? sum(putted.map(h => h.putts)) : '–')}
       ${row('OB', i => `<td>${r.holes[i].ob || '·'}</td>`, sum(hs.map(h => h.ob || 0)))}
       ${row('해저드', i => `<td>${r.holes[i].hazard || '·'}</td>`, sum(hs.map(h => h.hazard || 0)))}
+      ${row('티샷', i => `<td>${r.holes[i].teeShot === 1 ? '<span class="fw-ok" aria-label="안착">✓</span>' : r.holes[i].teeShot === 0 ? '<span class="fw-no" aria-label="실패">✗</span>' : '–'}</td>`, tsIdx.length ? `${tsHit}/${tsIdx.length}` : '–')}
     </tbody></table></div>`;
 }
 
@@ -57,13 +60,14 @@ export async function mount(el, { id }) {
   <div class="card" style="margin-top:12px"><div class="stat-tiles">
     <div class="stat-tile"><b class="num">${s.puttsN ? s.putts : '–'}</b><span>퍼팅</span></div>
     <div class="stat-tile"><b class="num">${s.girN ? Math.round((s.gir / s.girN) * 100) + '%' : '–'}</b><span>그린적중</span></div>
+    <div class="stat-tile"><b class="num">${s.fwN ? Math.round((s.fwHit / s.fwN) * 100) + '%' : '–'}</b><span>페어웨이</span></div>
     <div class="stat-tile"><b class="num">${s.ob}</b><span>OB</span></div>
     <div class="stat-tile"><b class="num">${s.hz}</b><span>해저드</span></div>
   </div></div>
 
   <div class="section-title"><span>스코어카드</span></div>
   <div class="card">${nineTable(r, 0)}${r.holes.length > 9 ? `<div style="height:14px"></div>${nineTable(r, 9)}` : ''}
-    <p class="small muted" style="margin:10px 0 0">홀 번호를 누르면 그 홀의 스코어 · 퍼팅 · OB · 해저드를 수정할 수 있어요.</p>
+    <p class="small muted" style="margin:10px 0 0">티샷 ✓ = 페어웨이 안착(파4·5) · 온그린(파3). 홀 번호를 누르면 그 홀의 스코어 · 퍼팅 · OB · 해저드를 수정할 수 있어요.</p>
     <div class="legend" style="margin-top:8px"><span><i class="t-b1" style="border-radius:50%"></i>버디↓</span><span><i class="t-0"></i>파</span><span><i class="t-r1"></i>보기</span><span><i class="t-r3"></i>더블↑</span></div></div>
 
   ${r.memo ? `<div class="section-title"><span>메모</span></div><div class="card"><p style="margin:0;white-space:pre-wrap">${esc(r.memo)}</p></div>` : ''}

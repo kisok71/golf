@@ -149,6 +149,8 @@ export async function mount(el, { id: rawId }) {
         ${puttWarn ? '<div class="warnline">퍼팅 수가 스코어와 같거나 더 커요. 확인해주세요.</div>' : ''}
         <div class="counter"><div class="nm"><i style="background:var(--over)"></i><span><b>OB</b><small>아웃오브바운즈</small></span></div>${stepper('ob', h.ob || 0)}</div>
         <div class="counter"><div class="nm"><i style="background:var(--under)"></i><span><b>해저드</b><small>워터 · 벙커 등</small></span></div>${stepper('hz', h.hazard || 0)}</div>
+        <div class="counter"><div class="nm"><i style="background:var(--brand)"></i><span><b>${par >= 4 ? '페어웨이' : '온그린'}</b><small>${par >= 4 ? '티샷 페어웨이 안착 여부' : '파3 티샷 온그린 여부'}</small></span></div>
+          <div class="fw-seg" role="group" aria-label="${par >= 4 ? '페어웨이 안착 여부' : '티샷 온그린 여부'}"><button data-act="fw" data-v="1" class="${h.teeShot === 1 ? 'on hit' : ''}" aria-pressed="${h.teeShot === 1}">${par >= 4 ? '안착' : '온그린'}</button><button data-act="fw" data-v="0" class="${h.teeShot === 0 ? 'on miss' : ''}" aria-pressed="${h.teeShot === 0}">실패</button></div></div>
       </div>
       <div class="navbtns">
         <button class="btn secondary" data-act="prev" ${i === 0 ? 'disabled' : ''}>${ic('back')} 이전</button>
@@ -223,6 +225,7 @@ export async function mount(el, { id: rawId }) {
       case 'ob-': setHole({ ob: clamp((h.ob || 0) - 1, 0, 9) }); break;
       case 'hz+': setHole({ hazard: clamp((h.hazard || 0) + 1, 0, 9) }); break;
       case 'hz-': setHole({ hazard: clamp((h.hazard || 0) - 1, 0, 9) }); break;
+      case 'fw': { const v = Number(b.dataset.v); setHole({ teeShot: h.teeShot === v ? null : v }); break; } // 같은 버튼을 다시 누르면 해제
       case 'save': save(); break;
     }
   };

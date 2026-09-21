@@ -117,6 +117,7 @@ function body(s, { heat, nine, hcp }) {
 
   const mini = `<div class="card" style="margin-top:12px"><div class="mini-stats">
     <div><div class="v">${s.gir == null ? '–' : Math.round(s.gir * 100) + '%'}</div><div class="l">그린적중</div></div>
+    <div><div class="v">${s.fairway.rate == null ? '–' : Math.round(s.fairway.rate * 100) + '%'}</div><div class="l">페어웨이</div></div>
     <div><div class="v">${p.threePerRound == null ? '–' : f1(p.threePerRound)}</div><div class="l">3퍼트/R</div></div>
     <div><div class="v">${f1(s.obPer)}</div><div class="l">OB/R</div></div>
     <div><div class="v">${f1(s.hzPer)}</div><div class="l">해저드/R</div></div>
@@ -136,6 +137,8 @@ function body(s, { heat, nine, hcp }) {
   const putt = p.total ? `<div class="card"><h2>퍼팅</h2><p class="hint">홀별 퍼팅 수 분포 (${p.total}홀)</p>${stackBar([
     { label: '1퍼트 이하', t: 't-b1', v: p.dist.le1 }, { label: '2퍼트', t: 't-0', v: p.dist.two }, { label: '3퍼트 이상', t: 't-r3', v: p.dist.three }], p.total)}</div>` : '';
 
+  const fwc = fairwayCard(s.fairway, s.par3);
+
   const pen = `<div class="card"><h2>OB · 해저드</h2><p class="hint">최근 ${Math.min(12, s.series.length)}라운드 · 라운드당 OB ${f1(s.obPer)} / 해저드 ${f1(s.hzPer)}</p>${penaltyChart(s.series)}
     ${s.trouble.length ? `<p class="small" style="margin:10px 0 0">트러블이 잦은 홀: ${s.trouble.map(h => `<b>${h.i + 1}번</b>(${h.trouble}회)`).join(', ')}</p>` : ''}</div>`;
 
@@ -149,7 +152,7 @@ function body(s, { heat, nine, hcp }) {
   const course = s.byCourse.length > 1 ? `<div class="card"><h2>코스별 평균 타수</h2><p class="hint">파 대비 평균 · 베스트</p>${hbars(
     s.byCourse.map(c => ({ name: c.key, sub: `${c.n}회 · 베스트 ${c.best}`, v: c.diff, label: f1(c.avg) + '타' })), { signedScale: true, wide: true })}</div>` : '';
 
-  return kpis + mini + insights + `<div class="section-title"><span>상세 분석</span></div><div class="dash-grid">${trend}${dist}${pt}${putt}${pen}${half}${weather}${course}${nine}${heat}</div>`;
+  return kpis + mini + insights + `<div class="section-title"><span>상세 분석</span></div><div class="dash-grid">${trend}${dist}${pt}${putt}${fwc}${pen}${half}${weather}${course}${nine}${heat}</div>`;
 }
 
 /** 홀별 평균 스코어 카드: 저장된 코스를 드롭다운으로 골라 그 코스만 분석한다 */
@@ -202,4 +205,25 @@ function nineCard(rounds, f) {
   const clubs = new Set(list.map(x => x.course));
   return `<div class="card"><h2>9홀 코스별 평균</h2><p class="hint">코스별 9홀 평균 타수 · 막대는 파 대비 (${list.reduce((a, b) => a + b.n, 0)}회)</p>${hbars(
     list.map(x => ({ name: x.nine, sub: (clubs.size > 1 ? `${x.course} · ` : '') + `${x.n}회 · 베스트 ${x.best}`, v: x.diff, label: f1(x.avg) + '타' })), { signedScale: true, wide: true })}</div>`;
+}
+
+/** 티샷 결과: 페어웨이 안착률(파4·파5)과 파3 온그린율 */
+function fairwayCard(fw, par3) {
+  if (!fw.total && !par3.total) return `<div class="card"><h2>페어웨이 · 온그린</h2><p class="hint" style="margin:0">홀별 입력에서 티샷 결과를 기록하면 분석해요. 파4·파5는 <b>페어웨이 안착</b>, 파3는 <b>티샷 온그린</b> 여부예요.</p></div>`;
+  const pct = r => Math.round(r * 100);
+  let body = '';
+  if (fw.total) {
+    const miss = fw.total - fw.hit;
+    const parRows = fw.byPar.map(p => `<div class="r"><span></span><span>파${p.par}</span><b>${pct(p.hit / p.total)}%</b><span>${p.hit}/${p.total}</span></div>`).join('');
+    const cmp = fw.diffHit != null && fw.diffMiss != null
+      ? `<p class="small" style="margin:12px 0 0">홀당 파 대비 <b>안착 ${signed(fw.diffHit, 1)}</b> · <b>실패 ${signed(fw.diffMiss, 1)}</b>${fw.diffMiss - fw.diffHit >= 0.2 ? ` → 페어웨이를 지키면 평균 ${(fw.diffMiss - fw.diffHit).toFixed(1)}타 유리해요` : ''}</p>` : '';
+    body += `<div class="row between" style="align-items:flex-end;margin-bottom:10px"><div><div class="small muted">페어웨이 안착률 (파4·5, ${fw.total}홀)</div><div class="num" style="font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1.1">${pct(fw.rate)}<small style="font-size:18px;color:var(--muted)">%</small></div></div><div class="small muted">안착 ${fw.hit} · 실패 ${miss}</div></div>
+      ${stackBar([{ label: '안착', t: 't-b1', v: fw.hit }, { label: '실패', t: 't-r3', v: miss }], fw.total)}
+      ${fw.byPar.length > 1 ? `<div class="legend-rows" style="margin-top:10px">${parRows}</div>` : ''}${cmp}`;
+  }
+  if (par3.total) {
+    body += `<div class="divider" style="${fw.total ? '' : 'display:none'}"></div>
+      <div class="row between"><div><div class="small muted">파3 티샷 온그린율 (${par3.total}홀)</div><div class="num" style="font-size:32px;font-weight:800;letter-spacing:-.03em;line-height:1.1">${pct(par3.rate)}<small style="font-size:16px;color:var(--muted)">%</small></div></div><div class="small muted">온그린 ${par3.hit} · 실패 ${par3.total - par3.hit}</div></div>`;
+  }
+  return `<div class="card"><h2>페어웨이 · 온그린</h2><p class="hint">티샷 결과 분석</p>${body}</div>`;
 }

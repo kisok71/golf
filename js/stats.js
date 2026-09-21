@@ -27,7 +27,7 @@ export function analyze(all, opts = {}) {
   const trend = n > 5 && prev5.length ? mean(last5) - mean(prev5) : null;
 
   const holes = rs.flatMap(x => x.r.holes.map((h, i) => ({
-    i, par: x.r.pars[i], score: h.score, putts: h.putts, ob: h.ob || 0, hz: h.hazard || 0, diff: h.score - x.r.pars[i], key: x.r.id
+    i, par: x.r.pars[i], score: h.score, putts: h.putts, ts: h.teeShot ?? null, ob: h.ob || 0, hz: h.hazard || 0, diff: h.score - x.r.pars[i], key: x.r.id
   })));
 
   const dist = Object.fromEntries(CATS.map(c => [c.k, 0]));
@@ -56,6 +56,19 @@ export function analyze(all, opts = {}) {
   const girOK = sum(rs.map(x => x.s.gir)), girN = sum(rs.map(x => x.s.girN));
   const gir = girN ? girOK / girN : null;
 
+  // 페어웨이 안착률(파4·5)과 파3 티샷 온그린율
+  const fwHoles = holes.filter(h => h.par >= 4 && h.ts != null);
+  const fwHit = fwHoles.filter(h => h.ts === 1), fwMiss = fwHoles.filter(h => h.ts === 0);
+  const fairway = {
+    total: fwHoles.length, hit: fwHit.length, rate: fwHoles.length ? fwHit.length / fwHoles.length : null,
+    rounds: rs.filter(x => x.s.fwN > 0).length,
+    byPar: [4, 5].map(p => { const l = fwHoles.filter(h => h.par === p); return { par: p, total: l.length, hit: l.filter(h => h.ts === 1).length }; }).filter(p => p.total > 0),
+    diffHit: mean(fwHit.map(h => h.diff)), diffMiss: mean(fwMiss.map(h => h.diff))
+  };
+  const p3Holes = holes.filter(h => h.par === 3 && h.ts != null);
+  const par3 = { total: p3Holes.length, hit: p3Holes.filter(h => h.ts === 1).length };
+  par3.rate = par3.total ? par3.hit / par3.total : null;
+
   const obPer = mean(rs.map(x => x.s.ob)), hzPer = mean(rs.map(x => x.s.hz));
   const holeStats = Array.from({ length: mode }, (_, i) => {
     const hs = holes.filter(h => h.i === i);
@@ -82,7 +95,7 @@ export function analyze(all, opts = {}) {
     putts: x.s.puttsN === x.s.n ? x.s.putts : null, ob: x.s.ob, hz: x.s.hz
   }));
 
-  const stats = { empty: false, mode, modes, n, avg, avgDiff, best, trend, dist, holeCount: holes.length, parType, putts, gir, obPer, hzPer, holeStats, trouble, half, byWeather, byCourse, series, opts };
+  const stats = { empty: false, mode, modes, n, avg, avgDiff, best, trend, dist, holeCount: holes.length, parType, putts, gir, fairway, par3, obPer, hzPer, holeStats, trouble, half, byWeather, byCourse, series, opts };
   stats.insights = makeInsights(stats);
   return stats;
 }
@@ -110,6 +123,20 @@ function makeInsights(s) {
       add('warn', 'target', `3퍼트가 라운드당 <b>${s.putts.threePerRound.toFixed(1)}회</b> 나와요`, '롱퍼트 거리감 연습이 타수를 가장 빨리 줄여줘요');
     else if (s.putts.perRound <= 32 && s.mode === 18)
       add('good', 'check', `라운드당 퍼팅 <b>${s.putts.perRound.toFixed(1)}개</b>로 퍼팅이 안정적이에요`);
+  }
+
+  const fw = s.fairway;
+  if (fw.total >= 10) {
+    const pct = Math.round(fw.rate * 100);
+    if (fw.rate >= 0.6) add('good', 'check', `페어웨이 안착률 <b>${pct}%</b>로 티샷이 안정적이에요`);
+    else if (fw.rate < 0.4) add('warn', 'target', `페어웨이 안착률이 <b>${pct}%</b>에 그쳐요`, '티샷 정확도를 높이면 타수가 줄어요');
+    if (fw.diffHit != null && fw.diffMiss != null && fw.diffMiss - fw.diffHit >= 0.4)
+      add('info', 'flag', `페어웨이를 지키면 홀당 평균 <b>${(fw.diffMiss - fw.diffHit).toFixed(1)}타</b> 적어요`, `안착 ${fmt(fw.diffHit)} · 실패 ${fmt(fw.diffMiss)} (파 대비)`);
+  }
+  if (s.par3.total >= 6) {
+    const p3 = Math.round(s.par3.rate * 100);
+    if (s.par3.rate >= 0.5) add('good', 'target', `파3 티샷 온그린율 <b>${p3}%</b>로 아이언샷이 좋아요`);
+    else if (s.par3.rate < 0.25) add('warn', 'target', `파3 티샷 온그린율이 <b>${p3}%</b>예요`, '파3에서는 안전하게 그린 중앙을 노려보세요');
   }
 
   const penalty = (s.obPer || 0) + (s.hzPer || 0);

@@ -447,3 +447,16 @@ table.sc th.rl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 .tee-row select.input { appearance: auto; }
 
 .banner a { font-weight: 700; text-decoration: underline; color: inherit; white-space: nowrap; }
+
+/* 티샷(페어웨이 / 온그린) 입력·표시 */
+.fw-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 172px; }
+.fw-seg button { height: 50px; border-radius: 14px; background: var(--surface-2); font-weight: 700; color: var(--ink-2); }
+.fw-seg button.on.hit { background: color-mix(in srgb, var(--under) 20%, var(--surface)); color: var(--under); box-shadow: inset 0 0 0 2px var(--under); }
+.fw-seg button.on.miss { background: color-mix(in srgb, var(--over) 16%, var(--surface)); color: var(--bad-text); box-shadow: inset 0 0 0 2px var(--over); }
+.fw-seg button:active { transform: scale(.97); }
+.fw-ok { color: var(--under); font-weight: 800; } .fw-no { color: var(--bad-text); font-weight: 800; }
+.mini-stats { grid-template-columns: repeat(5, 1fr); }
+.mini-stats .v { font-size: 18px; }
+.stat-tiles { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.stat-tile b { font-size: 18px; }
+.stat-tile span { font-size: 11px; }
