@@ -1,4 +1,4 @@
-import { CATS, catOf, mean, sortRounds, summarize, sum, fmtShort, expandNines } from './util.js';
+import { CATS, catOf, mean, sortRounds, summarize, sum, fmtShort, expandNines, differential } from './util.js';
 
 /**
  * 완성된 라운드만 대상으로 분석한다.
@@ -173,18 +173,21 @@ export function analyzeNines(all, { period = 'all', course = 'all' } = {}) {
 const WHS_TABLE = [[3, 1, -2], [4, 1, -1], [5, 1, 0], [6, 2, -1], [8, 2, 0], [11, 3, 0], [14, 4, 0], [16, 5, 0], [18, 6, 0], [19, 7, 0], [20, 8, 0]];
 
 /**
- * 추정 핸디캡. WHS 방식을 간이로 계산한다:
- * 완성된 18홀 라운드의 최근 20개에서 (스코어 - 파)가 좋은 라운드들의 평균 (3라운드부터).
- * 코스 레이팅·슬로프를 몰라 파를 기준으로 삼으므로 공식 핸디캡과는 차이가 날 수 있다.
- * 반환: { index(없으면 null), n(사용 가능한 18홀 라운드 수), used, adj }
+ * 추정 핸디캡. WHS 방식의 간이 계산:
+ * 완성된 18홀 라운드의 최근 20개에서 핸디캡 차이(Differential)가 좋은 라운드들의 평균 (3라운드부터).
+ * 라운드에 코스 레이팅·슬로프가 있으면 (스코어-레이팅)x113/슬로프, 없으면 (스코어-파)로 대신한다.
+ * 홀별 스코어 상한(ESC)과 기상 보정(PCC)은 반영하지 않는다.
+ * 반환: { index(없으면 null), n(18홀 라운드 수), used, adj, rated(레이팅·슬로프를 반영한 라운드 수) }
  */
 export function estimateHandicap(all) {
-  const rs = sortRounds(all).map(r => summarize(r)).filter(s => s.complete && s.n === 18);
+  const rs = sortRounds(all).map(r => ({ r, s: summarize(r) })).filter(x => x.s.complete && x.s.n === 18);
   const last = rs.slice(-20);
   const n = last.length;
-  if (n < 3) return { index: null, n, used: 0, adj: 0 };
+  const diffs = last.map(x => differential(x.r, x.s));
+  const rated = diffs.filter(d => d != null).length;
+  if (n < 3) return { index: null, n, used: 0, adj: 0, rated };
   const [, take, adj] = WHS_TABLE.find(([max]) => n <= max);
-  const diffs = last.map(x => x.diff).sort((a, b) => a - b);
-  const idx = mean(diffs.slice(0, take)) + adj;
-  return { index: Math.min(54, Math.round(idx * 10) / 10), n, used: take, adj };
+  const sorted = last.map((x, i) => diffs[i] ?? x.s.diff).sort((p, q) => p - q);
+  const idx = mean(sorted.slice(0, take)) + adj;
+  return { index: Math.min(54, Math.round(idx * 10) / 10), n, used: take, adj, rated };
 }

@@ -65,7 +65,7 @@ export function newRound(n = 18) {
     id: uid(), date: todayStr(), time: nowTime(), course: '', weather: 'sunny', temp: null,
     pars: DEFAULT_PARS.slice(0, n),
     holes: Array.from({ length: n }, () => ({ score: null, putts: null, ob: 0, hazard: 0 })),
-    memo: '', createdAt: Date.now()
+    tee: '', rating: null, slope: null, memo: '', createdAt: Date.now()
   };
 }
 export function resizeRound(r, n) {
@@ -108,6 +108,19 @@ export function splitNines(text) {
   return { front: m[2], back: m[3], rest };
 }
 
+/* 코스 레이팅(난이도 평가값)과 슬로프(상대 난이도, 113이 표준) */
+export const validRating = v => Number.isFinite(v) && v >= 25 && v <= 80;
+export const validSlope = v => Number.isInteger(v) && v >= 55 && v <= 155;
+
+/**
+ * 핸디캡 차이(Differential) = (스코어 - 코스 레이팅) x 113 / 슬로프.
+ * 레이팅·슬로프가 없거나 라운드를 끝까지 치지 않았으면 null.
+ */
+export function differential(r, s) {
+  if (!s.complete || !validRating(r.rating) || !validSlope(r.slope)) return null;
+  return Math.round(((s.score - r.rating) * 113 / r.slope) * 10) / 10;
+}
+
 /** 라운드의 전반(0)/후반(1) 9홀 코스 이름 */
 export const nineName = (r, half) => String((half === 0 ? r.frontName : r.backName) || '').trim();
 
@@ -129,7 +142,11 @@ export function courseRecord(existing, rd) {
   const f = nineName(rd, 0), b = rd.holes.length >= 18 ? nineName(rd, 1) : '';
   if (f) nines.set(f, rd.pars.slice(0, 9));
   if (b) nines.set(b, rd.pars.slice(9, 18));
-  return { ...(existing || {}), name: rd.course, pars: rd.pars, holes: rd.holes.length, front: f, back: b, nines: [...nines].map(([name, pars]) => ({ name, pars })) };
+  // 티(블루/화이트 등)별 레이팅·슬로프도 함께 기억한다 (같은 티·같은 홀 수는 최신 값으로 덮어씀)
+  const tee = String(rd.tee || '').trim(), n = rd.holes.length;
+  const tees = (existing?.tees || []).filter(t => !(t.name === tee && t.holes === n));
+  if (validRating(rd.rating) && validSlope(rd.slope)) tees.push({ name: tee, holes: n, rating: rd.rating, slope: rd.slope });
+  return { ...(existing || {}), name: rd.course, pars: rd.pars, holes: n, front: f, back: b, nines: [...nines].map(([name, pars]) => ({ name, pars })), tees, lastTee: tee };
 }
 
 export function downloadFile(name, text, type = 'application/json') {

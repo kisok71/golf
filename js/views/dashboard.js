@@ -95,8 +95,9 @@ function hcpBadge(h) {
   if (h.index == null) {
     return `<div class="hcp dim" data-tip="<b>추정 핸디캡</b><br>18홀을 끝까지 기록한 라운드가 3회 이상 있으면 계산해요."><small>추정 핸디캡</small><b>–</b><small>18홀 ${h.n}/3회</small></div>`;
   }
-  const how = `최근 ${h.n}개 18홀 라운드 중 파 대비가 좋은 ${h.used}개의 평균${h.adj ? ` ${h.adj > 0 ? '+' : ''}${h.adj.toFixed(1)}` : ''}`;
-  return `<div class="hcp" data-tip="<b>추정 핸디캡</b><br>${how}<br>코스 레이팅·슬로프를 반영하지 않은 간이 계산이라 공식 핸디캡과 다를 수 있어요."><small>추정 핸디캡</small><b>${fmtHcp(h.index)}</b></div>`;
+  const how = `최근 ${h.n}개 18홀 라운드 중 핸디캡 차이가 좋은 ${h.used}개의 평균${h.adj ? ` ${h.adj > 0 ? '+' : ''}${h.adj.toFixed(1)}` : ''}`;
+  const basis = h.rated === h.n ? '모든 라운드에 코스 레이팅·슬로프를 반영했어요.' : h.rated === 0 ? '코스 레이팅·슬로프가 없어 파를 기준으로 계산했어요. 라운드에 입력하면 더 정확해져요.' : `${h.n}개 중 ${h.rated}개만 레이팅·슬로프를 반영했고 나머지는 파 기준이에요.`;
+  return `<div class="hcp" data-tip="<b>추정 핸디캡</b><br>${how}<br>${basis}<br>홀별 스코어 상한 등은 반영하지 않아 공식 핸디캡과 다를 수 있어요."><small>추정 핸디캡</small><b>${fmtHcp(h.index)}</b></div>`;
 }
 
 function body(s, { heat, nine, hcp }) {

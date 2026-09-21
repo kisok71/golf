@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { ic } from '../icons.js';
-import { esc, summarize, signed, fmtDate, weatherIcon, weatherLabel, sum, tClass, catOf, scoreName, nineName } from '../util.js';
+import { esc, summarize, signed, fmtDate, weatherIcon, weatherLabel, sum, tClass, catOf, scoreName, nineName, differential } from '../util.js';
 import { pageHead, confirmDialog, toast } from '../ui.js';
 
 const shapeOf = d => {
@@ -38,6 +38,7 @@ export async function mount(el, { id }) {
   const r = await db.round(id);
   if (!r) { location.hash = '#/rounds'; return; }
   const s = summarize(r);
+  const diff = differential(r, s);
 
   el.innerHTML = pageHead({ title: r.course || '코스 미입력', sub: '라운드 상세', back: '#/rounds' }) + `
   <div class="detail-hero">
@@ -47,6 +48,7 @@ export async function mount(el, { id }) {
       ${r.time ? `<span>${ic('clock', 16)} ${r.time} 티오프</span>` : ''}
       <span>${weatherIcon(r.weather)} ${weatherLabel(r.weather)}${r.temp != null ? ` · ${r.temp}°C` : ''}</span>
       <span>${ic('flag', 16)} ${r.holes.length}홀 · 파 ${s.parTotal}</span>
+      ${r.rating != null && r.slope != null ? `<span>${ic('target', 16)} ${r.tee ? `${esc(r.tee)} · ` : ''}레이팅 ${r.rating} / 슬로프 ${r.slope}${diff != null ? ` · 핸디캡 차이 ${diff.toFixed(1)}` : ''}</span>` : ''}
       ${nineName(r, 0) || nineName(r, 1) ? `<span>${ic('pin', 16)} ${esc(nineName(r, 0) || '전반')}${r.holes.length >= 18 ? ` → ${esc(nineName(r, 1) || '후반')}` : ''}</span>` : ''}
     </div>
     ${s.complete ? '' : `<div class="info"><span class="badge warn">${s.filled}/${s.n}홀 입력됨 · 미완료 라운드는 분석에서 제외돼요</span></div>`}

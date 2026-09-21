@@ -441,3 +441,7 @@ table.sc th.rl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 .hcp b { display: block; font-size: 30px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; font-variant-numeric: tabular-nums; color: #e3f8a0; }
 .hcp.dim b { color: rgba(255, 255, 255, .7); }
 @media (max-width: 360px) { .hcp b { font-size: 26px; } .hcp { padding: 6px 10px 7px; } }
+
+.tee-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr 72px 30px; gap: 6px; margin-bottom: 6px; align-items: center; }
+.tee-row .input { min-height: 44px; padding: 0 8px; min-width: 0; }
+.tee-row select.input { appearance: auto; }

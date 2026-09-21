@@ -2,7 +2,7 @@ import { db } from '../db.js';
 import { ic } from '../icons.js';
 import {
   esc, newRound, resizeRound, summarize, signed, clamp, sum, WEATHER, weatherIcon, scoreName, tClass,
-  parGridHtml, cyclePar, todayStr, courseRecord, defaultPutts, splitNines
+  parGridHtml, cyclePar, todayStr, courseRecord, defaultPutts, splitNines, validRating, validSlope
 } from '../util.js';
 import { toast, confirmDialog } from '../ui.js';
 import { openCoursePicker } from './coursepicker.js';
@@ -85,12 +85,27 @@ export async function mount(el, { id: rawId }) {
         <div class="field" style="margin-bottom:0"><label for="f-temp">기온 (°C, 선택)</label><input id="f-temp" class="input" type="number" inputmode="numeric" placeholder="예: 22" value="${rd.temp ?? ''}"></div>
       </div>
       <div class="card">
+        <h2>코스 난이도 <span class="badge">선택</span></h2>
+        <p class="hint">스코어카드나 골프장 안내에 적힌 값을 넣으면 핸디캡을 더 정확하게 추정해요. 한 번 입력하면 이 코스는 기억해요.</p>
+        <div class="field"><label for="f-tee">티</label>
+          <input id="f-tee" class="input" list="tee-list" placeholder="예: 화이트" value="${esc(rd.tee || '')}" autocomplete="off">
+          <datalist id="tee-list">${teeNames().map(n => `<option value="${esc(n)}">`).join('')}</datalist></div>
+        <div class="two" style="margin-bottom:0">
+          <div class="field" style="margin-bottom:0"><label for="f-rating">코스 레이팅${rd.holes.length === 9 ? ' (9홀)' : ''}</label>
+            <input id="f-rating" class="input" type="number" inputmode="decimal" step="0.1" placeholder="예: 72.4" value="${rd.rating ?? ''}"></div>
+          <div class="field" style="margin-bottom:0"><label for="f-slope">슬로프${rd.holes.length === 9 ? ' (9홀)' : ''}</label>
+            <input id="f-slope" class="input" type="number" inputmode="numeric" step="1" placeholder="예: 131" value="${rd.slope ?? ''}"></div>
+        </div>
+      </div>
+      <div class="card">
         <h2>홀별 파</h2><p class="hint">숫자를 누르면 3 → 4 → 5 순서로 바뀌어요 · 합계 <b class="num">${sum(rd.pars)}</b></p>
         ${parGridHtml(rd.pars)}
       </div>
       <div class="card"><div class="field" style="margin-bottom:0"><label for="f-memo">메모 (선택)</label><textarea id="f-memo" class="input" placeholder="동반자, 컨디션, 잘된 샷 등">${esc(rd.memo)}</textarea></div></div>
       <button class="btn block lime" data-act="start" style="margin-top:14px">홀별 입력 시작 ${ic('chev')}</button>`;
   };
+
+  const teeNames = () => [...new Set([...(courseRec()?.tees || []).map(t => t.name).filter(Boolean), '블루', '화이트', '레드', '블랙', '골드'])];
 
   const nineFields = rd => {
     const known = nineNames();
@@ -149,6 +164,13 @@ export async function mount(el, { id: rawId }) {
   async function save() {
     const rd = r();
     if (!rd.course.trim()) { st.step = 'info'; render(); toast('코스 이름을 입력해주세요'); el.querySelector('#f-course')?.focus(); return; }
+    const hasR = rd.rating != null, hasS = rd.slope != null;
+    if (hasR !== hasS || (hasR && (!validRating(rd.rating) || !validSlope(rd.slope)))) {
+      st.step = 'info'; render();
+      toast(hasR !== hasS ? '코스 레이팅과 슬로프를 함께 입력해주세요' : '레이팅은 25~80, 슬로프는 55~155 범위로 입력해주세요', 3200);
+      return;
+    }
+    rd.tee = (rd.tee || '').trim();
     const s = summarize(rd);
     if (!s.filled) { toast('스코어를 한 홀 이상 입력해주세요'); return; }
     if (!s.complete && !(await confirmDialog({ title: `${s.n - s.filled}홀이 비어 있어요`, message: '이대로 저장하면 미완료 기록으로 남고, 분석에는 포함되지 않아요. 나중에 이어서 입력할 수 있어요.', ok: '저장' }))) return;
@@ -268,6 +290,9 @@ export async function mount(el, { id: rawId }) {
         resizeRound(rd, n);
         rd.pars = [...c.pars];
         rd.frontName = c.front || ''; rd.backName = n >= 18 ? c.back || '' : '';
+        const tees = (c.tees || []).filter(x => x.holes === n);
+        const lt = tees.find(x => x.name === (c.lastTee ?? '')) || tees[0];
+        if (lt) { rd.tee = lt.name; rd.rating = lt.rating; rd.slope = lt.slope; }
         persist(); render();
         el.querySelector('#f-course')?.focus();
         toast('저장된 코스의 파 정보를 불러왔어요');
@@ -286,7 +311,19 @@ export async function mount(el, { id: rawId }) {
         toast(`“${nine.name}” 코스의 파를 불러왔어요`);
         return;
       }
-    } else if (t.id === 'f-temp') rd.temp = t.value === '' ? null : Number(t.value);
+    } else if (t.id === 'f-tee') {
+      rd.tee = t.value;
+      const tee = courseRec()?.tees?.find(x => x.name === t.value.trim() && x.holes === rd.holes.length);
+      if (tee && (rd.rating !== tee.rating || rd.slope !== tee.slope)) {
+        rd.rating = tee.rating; rd.slope = tee.slope;
+        persist(); render();
+        el.querySelector('#f-tee')?.focus();
+        toast(`${tee.name || '저장된'} 티의 레이팅·슬로프를 불러왔어요`);
+        return;
+      }
+    } else if (t.id === 'f-rating') rd.rating = t.value === '' ? null : Number(t.value);
+    else if (t.id === 'f-slope') rd.slope = t.value === '' ? null : Number(t.value);
+    else if (t.id === 'f-temp') rd.temp = t.value === '' ? null : Number(t.value);
     else if (t.id === 'f-memo') rd.memo = t.value;
     persist();
   };

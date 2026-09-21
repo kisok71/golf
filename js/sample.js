@@ -3,16 +3,16 @@ import { dateStr, uid } from './util.js';
 
 /* 골프장마다 9홀 코스가 여러 개 있고, 라운드마다 전반/후반 코스를 조합해서 친다 */
 const COURSES = [
-  { name: '레이크사이드 CC', nines: [
+  { name: '레이크사이드 CC', rating: 72.0, slope: 128, nines: [
     { name: '서', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },
     { name: '남', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },
     { name: '동', pars: [5, 4, 4, 3, 4, 4, 3, 5, 4] }
   ] },
-  { name: '그린힐 CC', nines: [
+  { name: '그린힐 CC', rating: 71.2, slope: 125, nines: [
     { name: '레이크', pars: [5, 4, 4, 3, 4, 4, 3, 5, 4] },
     { name: '밸리', pars: [4, 3, 5, 4, 4, 3, 4, 5, 4] }
   ] },
-  { name: '파인밸리 CC', nines: [
+  { name: '파인밸리 CC', rating: 70.5, slope: 122, nines: [
     { name: '힐', pars: [4, 3, 5, 4, 4, 3, 4, 5, 4] },
     { name: '마운틴', pars: [4, 5, 3, 4, 4, 3, 5, 4, 4] }
   ] }
@@ -66,14 +66,15 @@ export async function loadSamples(count = 22) {
     });
     rounds.push({
       id: uid() + k, date: dateStr(d), time: TIMES[Math.floor(rand() * TIMES.length)], course: course.name,
-      frontName: front.name, backName: back.name, weather,
+      frontName: front.name, backName: back.name, tee: '화이트', rating: course.rating, slope: course.slope, weather,
       temp: Math.round(MONTH_TEMP[d.getMonth()] + (rand() - 0.5) * 6), pars, holes, memo: '',
       createdAt: Date.now() + k, sample: true
     });
   }
   await db.putMany(rounds, COURSES.map(c => ({
     name: c.name, pars: [...c.nines[0].pars, ...c.nines[1].pars], holes: 18,
-    front: c.nines[0].name, back: c.nines[1].name, nines: c.nines
+    front: c.nines[0].name, back: c.nines[1].name, nines: c.nines,
+    tees: [{ name: '화이트', holes: 18, rating: c.rating, slope: c.slope }], lastTee: '화이트'
   })));
   return rounds.length;
 }
