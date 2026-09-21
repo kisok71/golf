@@ -184,3 +184,31 @@ export async function recognize(canvas, onProgress, { psm = '11', lang = 'eng' }
   const { data } = await worker.recognize(canvas);
   return data;
 }
+
+/**
+ * 각 줄의 이름 칸(숫자 왼쪽)만 잘라 크게 키운 뒤 한 줄 글자로 다시 읽는다.
+ * 작은 한글 이름이 통째 화면을 읽을 때 틀리게 나오는 경우를 줄인다.
+ * boxes: [{ firstX, y0, y1 }] (canvas 좌표) → 각 줄의 이름 문자열
+ */
+export async function ocrLabels(canvas, boxes, { lang = 'kor+eng' } = {}) {
+  const worker = await getWorker(lang);
+  await worker.setParameters({ tessedit_pageseg_mode: '7', preserve_interword_spaces: '0', user_defined_dpi: '300' });
+  const out = [];
+  for (const b of boxes) {
+    const x1 = Math.max(0, b.firstX - 4);
+    const x0 = Math.max(0, x1 - canvas.width * 0.38);
+    const y0 = Math.max(0, b.y0 - 6), y1 = Math.min(canvas.height, b.y1 + 6);
+    const w = x1 - x0, h = y1 - y0;
+    if (!(w > 20 && h > 8)) { out.push(''); continue; }
+    const scale = Math.max(2, 72 / h);
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * scale) + 40; c.height = Math.round(h * scale) + 40;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, x0, y0, w, h, 20, 20, w * scale, h * scale);
+    const { data } = await worker.recognize(c);
+    out.push(String(data.text || '').replace(/\s+/g, '').replace(/[^가-힣A-Za-z*＊]/g, ''));
+  }
+  return out;
+}

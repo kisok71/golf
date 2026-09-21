@@ -1,13 +1,19 @@
 import { ic } from '../icons.js';
 import { esc, newRound, DEFAULT_PARS, todayStr, sum, defaultPutts } from '../util.js';
-import { loadBitmap, preprocess, recognize, thumbnail } from '../ocr.js';
-import { parseScorecard, chunkSums, matchesName } from '../scorecard.js';
+import { loadBitmap, preprocess, recognize, thumbnail, ocrLabels } from '../ocr.js';
+import { parseScorecard, chunkSums, matchesName, selectMyRows } from '../scorecard.js';
 import { pageHead, toast } from '../ui.js';
 import { setDraft } from './editor.js';
 
 const PLAYER = 'gn.player';
 export const getPlayer = () => { try { return localStorage.getItem(PLAYER) || ''; } catch { return ''; } };
 export const setPlayer = v => { try { v ? localStorage.setItem(PLAYER, v) : localStorage.removeItem(PLAYER); } catch { /* noop */ } };
+
+const ALIASES = 'gn.playerAliases', PIDX = 'gn.playerIdx';
+export const getAliases = () => { try { return JSON.parse(localStorage.getItem(ALIASES)) || []; } catch { return []; } };
+const addAlias = a => { try { const l = getAliases(); if (a && !l.includes(a)) localStorage.setItem(ALIASES, JSON.stringify([...l, a].slice(-8))); } catch { /* noop */ } };
+const getIdx = () => { try { const v = localStorage.getItem(PIDX); return v == null ? null : Number(v); } catch { return null; } };
+const setIdx = v => { try { localStorage.setItem(PIDX, String(v)); } catch { /* noop */ } };
 
 const ROLES = [['ignore', '사용 안 함'], ['par', '파'], ['score', '내 스코어'], ['score_rel', '내 스코어 (파 대비)'], ['putts', '퍼팅']];
 const RANGES = [['front', '전반 1-9'], ['back', '후반 10-18']];
@@ -93,18 +99,31 @@ export async function mount(el) {
       const bmp = await loadBitmap(file);
       const image = thumbnail(bmp);
       const used = r => r.filter(x => x.role !== 'ignore').length;
-      let parsed = null, meta = { date: null, time: null, title: '', front: '', back: '' };
+      const aliases = getAliases(), playerIdx = getIdx();
+      let parsed = null, parsedCv = null, meta = { date: null, time: null, title: '', front: '', back: '' };
       for (let k = 0; k < ATTEMPTS.length; k++) {
         if (k) { state.status = '다른 방식으로 한 번 더 읽는 중…'; state.progress = 0.3; update({}); }
         const [pre, psm, lang] = ATTEMPTS[k];
-        const data = await recognize(preprocess(bmp, pre), update, { psm, lang });
-        const p = parseScorecard(data, { player });
+        const cv = preprocess(bmp, pre);
+        const data = await recognize(cv, update, { psm, lang });
+        const p = parseScorecard(data, { player, aliases, playerIdx });
         meta = { date: meta.date || p.date, time: meta.time || p.time, title: meta.title || p.title, front: meta.front || p.front, back: meta.back || p.back };
-        if (!parsed || used(p.rows) > used(parsed.rows)) parsed = p;
+        if (!parsed || used(p.rows) > used(parsed.rows)) { parsed = p; parsedCv = cv; }
         if (parsed.rows.some(r => r.role === 'par') && parsed.rows.some(r => r.role === 'score' || r.role === 'score_rel')) break;
       }
+      // 이름을 못 찾았으면 각 줄의 이름 칸만 크게 잘라 다시 읽어 본다
+      if (player && parsed.matchedBy !== 'name') {
+        try {
+          state.status = '이름을 다시 읽는 중…'; state.progress = 0.9; update({});
+          const cands = parsed.rows.filter(r => r.candidate && r.box).slice(0, 10);
+          const labels = await ocrLabels(parsedCv, cands.map(r => r.box), { lang: 'kor+eng' });
+          cands.forEach((r, i) => { r.labelAlt = labels[i] || ''; });
+          parsed.matchedBy = selectMyRows(parsed.rows, { player, aliases, playerIdx });
+          parsed.playerMatched = parsed.matchedBy === 'name';
+        } catch (e) { console.warn('이름 재인식 실패', e); }
+      }
       state = {
-        phase: 'review', preview: prevUrl, image, rows: parsed.rows, player, playerMatched: parsed.playerMatched,
+        phase: 'review', matchedBy: parsed.matchedBy, preview: prevUrl, image, rows: parsed.rows, player, playerMatched: parsed.playerMatched,
         date: meta.date || todayStr(), dateFound: !!meta.date, time: meta.time || '', title: meta.title || '', front: meta.front || '', back: meta.back || ''
       };
     } catch (err) {
@@ -141,7 +160,30 @@ export async function mount(el) {
   el.onclick = e => {
     if (e.target.closest('#retry')) { state = { phase: 'pick' }; draw(); }
     if (e.target.closest('#apply')) apply();
+    const mine = e.target.closest('[data-mine]');
+    if (mine) pickMine(Number(mine.dataset.mine));
   };
+
+  /** 이 줄을 내 줄로 선택: 같은 표의 다른 사람 줄은 제외하고, 다른 쪽 표(전반/후반)에서도 같은 순서의 줄을 고른다 */
+  function pickMine(ri) {
+    const row = state.rows[ri];
+    const cands = state.rows.filter(r => r.candidate);
+    const order = cands.filter(r => r.range === row.range);
+    const idx = Math.max(0, order.indexOf(row));
+    const cardRel = state.rows.some(r => r.candidate === 'score_rel');
+    const asScore = r => (r.candidate === 'putts' ? (cardRel ? 'score_rel' : 'score') : r.candidate);
+    for (const r of cands) {
+      const sameIdx = cands.filter(x => x.range === r.range).indexOf(r) === idx;
+      r.role = sameIdx ? asScore(r) : 'ignore';
+    }
+    // 다음부터 자동으로 찾도록: 이 줄의 이름 표기와 순서를 기억한다
+    const label = row.label || row.labelAlt;
+    if (label && !matchesName(label, state.player || '')) addAlias(label);
+    setIdx(idx);
+    state.matchedBy = 'manual';
+    toast('내 줄로 선택했어요. 다음부터 기억해요');
+    draw();
+  }
 
   function apply() {
     const rows = state.rows.filter(r => r.role !== 'ignore');
@@ -209,7 +251,10 @@ function reviewHtml(s) {
       chk.every(c => c.ok) ? `✓ 카드의 합계(${chk.map(c => c.sub).join(' · ')})와 일치해요`
         : `합계가 달라요 · 카드 ${chk.map(c => c.sub).join(' / ')} ↔ 읽은 값 ${chk.map(c => c.calc).join(' / ')} — 숫자를 확인하세요`}</div>` : '';
     return `<div class="scanrow ${r.role === 'ignore' ? 'ignored' : ''}">
-      <div class="small" style="margin-bottom:6px;font-weight:700">${r.label ? esc(r.label) : '<span class="muted">이름 없음</span>'}${s.player && matchesName(r.label, s.player) && r.role !== 'ignore' && r.role !== 'par' ? ' <span class="badge">내 줄</span>' : ''}</div>
+      <div class="row between" style="margin-bottom:6px">
+        <div class="small" style="font-weight:700">${r.label ? esc(r.label) : '<span class="muted">이름 없음</span>'}${r.labelAlt && r.labelAlt !== r.label ? ` <span class="muted" style="font-weight:500">(다시 읽음: ${esc(r.labelAlt)})</span>` : ''}${r.role === 'score' || r.role === 'score_rel' ? ' <span class="badge">내 줄</span>' : ''}</div>
+        ${r.candidate && r.role === 'ignore' ? `<button class="chip" data-mine="${ri}" style="min-height:32px">내 줄로 선택</button>` : ''}
+      </div>
       <div class="rh">
         <select data-role="${ri}" aria-label="줄 ${ri + 1} 용도">${ROLES.map(([k, l]) => `<option value="${k}"${r.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
         ${nine ? `<select data-range="${ri}" aria-label="줄 ${ri + 1} 범위">${RANGES.map(([k, l]) => `<option value="${k}"${r.range === k ? ' selected' : ''}>${l}</option>`).join('')}</select>` : '<span class="muted small" style="align-self:center">18홀 전체</span>'}
@@ -221,8 +266,11 @@ function reviewHtml(s) {
     </div>`;
   }).join('');
 
-  const notice = s.player && !s.playerMatched
-    ? `<div class="banner" style="background:color-mix(in srgb,#eda100 18%,transparent);color:var(--ink)">${ic('alert', 18)}<span class="grow">“${esc(s.player)}” 이름을 찾지 못했어요. 내 줄을 아래에서 직접 골라주세요.</span></div>` : '';
+  const warn = t => `<div class="banner" style="background:color-mix(in srgb,#eda100 18%,transparent);color:var(--ink)">${ic('alert', 18)}<span class="grow">${t}</span></div>`;
+  const notice = s.matchedBy === 'name' || s.matchedBy === 'manual' ? ''
+    : s.matchedBy === 'index' ? warn('이름은 못 찾았지만 지난번에 고른 위치의 줄을 선택했어요. 맞는지 확인하세요.')
+    : s.player ? warn(`“${esc(s.player)}” 이름을 찾지 못했어요. 첫 번째 줄을 임시로 골랐어요. 내 줄이 아니면 그 줄의 <b>내 줄로 선택</b>을 눌러주세요. 한 번 고르면 다음부터 기억해요.`)
+    : warn('내 이름이 저장돼 있지 않아요. 설정에서 이름을 저장하거나, 내 줄의 <b>내 줄로 선택</b>을 눌러주세요.');
 
   return `${pageHead({ title: '인식 결과 확인', sub: '읽은 내용을 확인하세요', back: '#/scan' })}
     <details class="card" style="padding:12px 16px"><summary style="cursor:pointer;font-weight:700">원본 사진 보기</summary><img class="photo" src="${s.preview}" alt="스코어카드" style="margin-top:10px"></details>
