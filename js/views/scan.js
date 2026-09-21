@@ -267,9 +267,10 @@ function reviewHtml(s) {
         <select data-role="${ri}" aria-label="줄 ${ri + 1} 용도">${ROLES.map(([k, l]) => `<option value="${k}"${r.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
         ${nine ? `<select data-range="${ri}" aria-label="줄 ${ri + 1} 범위">${RANGES.map(([k, l]) => `<option value="${k}"${r.range === k ? ' selected' : ''}>${l}</option>`).join('')}</select>` : '<span class="muted small" style="align-self:center">18홀 전체</span>'}
       </div>
-      <div class="cells">${r.vals.map((v, ci) => `<input inputmode="numeric" data-cell="${ri},${ci}" value="${v ?? ''}" aria-label="${ci + 1}번째 칸">`).join('')}</div>
+      <div class="cells">${r.vals.map((v, ci) => `<input inputmode="numeric" data-cell="${ri},${ci}" value="${v ?? ''}" aria-label="${ci + 1}번째 칸"${r.repaired?.includes(ci) ? ' class="fixed"' : ''}>`).join('')}</div>
       ${r.role === 'score_rel' ? '<div class="small muted" style="margin-top:6px">파 대비 값이에요 (0=파, 1=보기, -1=버디). 파를 더해 타수로 바꿔요.</div>' : ''}
       ${chkHtml}
+      ${r.repaired?.length ? `<div class="small" style="margin-top:6px;color:var(--good-text)">잘못 읽힌 칸을 카드 합계에 맞춰 채웠어요 (${r.repaired.map(i => `${i + 1}번째`).join(', ')}). 맞는지 확인하세요.</div>` : ''}
       ${r.incomplete ? '<div class="small over-t" style="margin-top:6px">일부 칸을 못 읽었어요. 빈 칸을 채워주세요.</div>' : ''}
     </div>`;
   }).join('');

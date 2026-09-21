@@ -192,6 +192,30 @@ function pickRows(rows, { player = '', aliases = [], playerIdx = null } = {}) {
 }
 
 /**
+ * 상식 밖의 값(파 대비 9 초과, 타수 15 초과 등)이나 빈 칸이 한 9홀에 딱 하나라면,
+ * 카드에 적힌 합계로 그 칸의 값을 복원한다. 예: 합계 38, 파 36, 나머지 합 1 → 빠진 칸은 1.
+ * 두 칸 이상 이상하면 복원하지 않고 비워 둔다(확인 화면에서 직접 입력).
+ */
+function repairRow(item, expectPar) {
+  const rel = item.candidate === 'score_rel';
+  const ok = v => v != null && (rel ? v >= -4 && v <= 9 : v >= 1 && v <= 15);
+  item.repaired = [];
+  [0, 9].filter(st => st < item.vals.length).forEach((st, k) => {
+    const par = rel ? expectPar(k) : 0;
+    const sub = item.subs[k];
+    const bad = [];
+    let known = 0;
+    for (let i = st; i < st + 9; i++) { const x = item.vals[i]; if (ok(x)) known += x; else bad.push(i); }
+    bad.forEach(i => { item.vals[i] = null; });
+    if (bad.length === 1 && sub != null && par != null) {
+      const val = sub - par - known;
+      if (ok(val)) { item.vals[bad[0]] = val; item.repaired.push(bad[0]); }
+    }
+  });
+  item.incomplete = item.vals.some(x => x == null);
+}
+
+/**
  * 내 줄을 이름(또는 기억한 위치)으로 확실히 찾았다면, 다른 플레이어의 줄은 인식 결과에서 아예 뺀다.
  * 찾지 못한 경우에는 사용자가 직접 고를 수 있도록 모든 후보 줄을 남긴다.
  */
@@ -248,14 +272,20 @@ export function parseScorecard(data, { player = '', aliases = [], playerIdx = nu
     const relBySubs = item.subs.length > 0 && item.subs.every((s, k) => expectPar(k) != null && Math.abs(s - (sums[k] + expectPar(k))) <= 3);
     // 파 합계를 모르는 경우: 소계와 칸 합의 차이가 한 9홀의 파 합계(대개 33~40)쯤이면 파 대비 값
     const relByGap = item.subs.length > 0 && item.subs.every((s, k) => s - sums[k] >= 28 && s - sums[k] <= 45);
-    const rel = relBySubs || relByGap || v.some(x => x != null && x < 0) || (cardRel && item.subs.length === 0 && v.every(x => x == null || x <= 6));
-    if (rel) cardRel = true;
     const a = v.filter(x => x != null);
     const avg = sum(a) / Math.max(1, a.length);
+    const med = a.length ? [...a].sort((x, y) => x - y)[a.length >> 1] : 0;
+    const hasSubs = item.subs.length > 0 && item.subs.every(t => t >= 25);
+    // 앞 표에서 파 대비 형식이 확인됐다면(cardRel), 합계 칸이 있고 값이 작은 다른 줄도 파 대비로 본다.
+    // 숫자를 하나 잘못 읽어 합계가 맞지 않는 줄도 놓치지 않기 위함이다.
+    const relByCard = hasSubs && med <= (cardRel ? 3 : 2);
+    const rel = relBySubs || relByGap || relByCard || v.some(x => x != null && x < 0) || (cardRel && item.subs.length === 0 && v.every(x => x == null || x <= 6));
+    if (rel) cardRel = true;
     const nameHit = names.some(n => matchesName(row.label, n));
     const puttLike = !rel && !nameHit && a.every(x => x <= 6) && avg <= 2.6;
     const slot = assigned[item.range];
     item.candidate = rel ? 'score_rel' : puttLike ? 'putts' : 'score';
+    if (item.candidate !== 'putts') repairRow(item, expectPar);
     if (puttLike) { if (!slot.putts && slot.score) { item.role = 'putts'; slot.putts = true; } }
     else if (!slot.score) { item.role = item.candidate; slot.score = true; }
     out.push(item);
