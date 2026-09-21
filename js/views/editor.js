@@ -2,7 +2,7 @@ import { db } from '../db.js';
 import { ic } from '../icons.js';
 import {
   esc, newRound, resizeRound, summarize, signed, clamp, sum, WEATHER, weatherIcon, scoreName, tClass,
-  parGridHtml, cyclePar, todayStr
+  parGridHtml, cyclePar, todayStr, courseRecord
 } from '../util.js';
 import { toast, confirmDialog } from '../ui.js';
 import { openCoursePicker } from './coursepicker.js';
@@ -29,6 +29,8 @@ export async function mount(el, { id }) {
     st = d?.round ? { ...d, resumed: !d.fromScan, editing: false } : { round: newRound(), step: 'info', cur: 0, editing: false };
   }
   const r = () => st.round;
+  const courseRec = () => courses.find(x => x.name === r().course.trim());
+  const nineNames = () => (courseRec()?.nines || []).map(n => n.name);
   const persist = () => { if (!st.editing) writeDraft({ round: st.round, step: st.step, cur: st.cur, fromScan: st.fromScan }); };
 
   const render = () => {
@@ -70,6 +72,7 @@ export async function mount(el, { id }) {
             <button class="btn soft" data-act="search" style="flex:none;padding:0 16px" aria-label="코스 검색">${ic('search')} 검색</button></div>
           <span class="small muted">이름을 입력하고 검색하면 홀별 파를 가져와요</span>
           <datalist id="course-list">${courses.map(c => `<option value="${esc(c.name)}">`).join('')}</datalist></div>
+        ${nineFields(rd)}
         <div class="field"><span class="lb">홀 수</span>
           <div class="seg"><button data-act="holes" data-v="18" class="${rd.holes.length === 18 ? 'on' : ''}">18홀</button><button data-act="holes" data-v="9" class="${rd.holes.length === 9 ? 'on' : ''}">9홀</button></div></div>
       </div>
@@ -84,6 +87,20 @@ export async function mount(el, { id }) {
       </div>
       <div class="card"><div class="field" style="margin-bottom:0"><label for="f-memo">메모 (선택)</label><textarea id="f-memo" class="input" placeholder="동반자, 컨디션, 잘된 샷 등">${esc(rd.memo)}</textarea></div></div>
       <button class="btn block lime" data-act="start" style="margin-top:14px">홀별 입력 시작 ${ic('chev')}</button>`;
+  };
+
+  const nineFields = rd => {
+    const known = nineNames();
+    const list = `<datalist id="nine-list">${known.map(n => `<option value="${esc(n)}">`).join('')}</datalist>`;
+    const hint = known.length
+      ? `<span class="small muted">저장된 코스: ${known.map(esc).join(' · ')} — 이름을 고르면 그 코스의 파가 채워져요</span>`
+      : '<span class="small muted">골프장에 9홀 코스가 여러 개면 이름을 적어두세요 (예: 서, 남). 코스별로 분석할 수 있어요</span>';
+    if (rd.holes.length === 9) {
+      return `<div class="field"><label for="f-front">9홀 코스 이름 (선택)</label><input id="f-front" class="input" list="nine-list" placeholder="예: 서" value="${esc(rd.frontName || '')}" autocomplete="off">${hint}${list}</div>`;
+    }
+    return `<div class="two" style="margin-bottom:0"><div class="field"><label for="f-front">전반 코스 이름</label><input id="f-front" class="input" list="nine-list" placeholder="예: 서" value="${esc(rd.frontName || '')}" autocomplete="off"></div>
+      <div class="field"><label for="f-back">후반 코스 이름</label><input id="f-back" class="input" list="nine-list" placeholder="예: 남" value="${esc(rd.backName || '')}" autocomplete="off"></div></div>
+      <div class="field" style="margin-top:-6px">${hint}${list}</div>`;
   };
 
   const holesHtml = () => {
@@ -132,9 +149,11 @@ export async function mount(el, { id }) {
     if (!s.filled) { toast('스코어를 한 홀 이상 입력해주세요'); return; }
     if (!s.complete && !(await confirmDialog({ title: `${s.n - s.filled}홀이 비어 있어요`, message: '이대로 저장하면 미완료 기록으로 남고, 분석에는 포함되지 않아요. 나중에 이어서 입력할 수 있어요.', ok: '저장' }))) return;
     rd.course = rd.course.trim();
+    rd.frontName = (rd.frontName || '').trim();
+    rd.backName = rd.holes.length >= 18 ? (rd.backName || '').trim() : '';
     delete rd.sample;
     await db.saveRound(rd);
-    await db.saveCourse({ name: rd.course, pars: rd.pars, holes: rd.holes.length });
+    await db.saveCourse(courseRecord(courseRec(), rd));
     clearDraft();
     toast('저장했어요');
     location.hash = `#/round/${rd.id}`;
@@ -182,14 +201,24 @@ export async function mount(el, { id }) {
   function searchCourse() {
     openCoursePicker({
       query: r().course, saved: courses,
-      onApply: ({ name, pars }) => {
+      onApply: async ({ name, pars, frontName, backName, nines }) => {
         const rd = r();
+        if (nines?.length && name) {
+          const base = courses.find(c => c.name === name) || { name, pars: [], holes: 18 };
+          const map = new Map((base.nines || []).map(n => [n.name, n.pars]));
+          nines.forEach(n => map.set(n.name, n.pars));
+          const rec = { ...base, nines: [...map].map(([nm, ps]) => ({ name: nm, pars: ps })) };
+          await db.saveCourse(rec);
+          const i = courses.findIndex(c => c.name === name);
+          if (i >= 0) courses[i] = rec; else courses.push(rec);
+        }
         const n = pars.length <= 9 ? 9 : 18;
         const missing = pars.filter(p => p == null).length;
         mut(() => {
           resizeRound(rd, n);
           rd.pars = Array.from({ length: n }, (_, i) => pars[i] ?? rd.pars[i] ?? 4);
           if (name) rd.course = name;
+          if (frontName !== undefined) { rd.frontName = frontName; rd.backName = n === 18 ? backName || '' : ''; }
           st.cur = Math.min(st.cur, n - 1);
         });
         toast(missing ? `${n}홀 파를 채웠어요 · ${missing}홀은 정보가 없어 기본값이에요. 확인해주세요` : `${n}홀 파 정보를 채웠어요. 맞는지 확인해주세요`, 3600);
@@ -209,9 +238,23 @@ export async function mount(el, { id }) {
         const n = c.pars.length;
         resizeRound(rd, n);
         rd.pars = [...c.pars];
+        rd.frontName = c.front || ''; rd.backName = n >= 18 ? c.back || '' : '';
         persist(); render();
         el.querySelector('#f-course')?.focus();
         toast('저장된 코스의 파 정보를 불러왔어요');
+        return;
+      }
+    } else if (t.id === 'f-front' || t.id === 'f-back') {
+      const half = t.id === 'f-front' ? 0 : 1;
+      if (half === 0) rd.frontName = t.value; else rd.backName = t.value;
+      // 저장된 9홀 코스 이름과 정확히 같으면 그 코스의 파를 해당 9홀에 채운다
+      const nine = courseRec()?.nines?.find(n => n.name === t.value.trim());
+      const at = half * 9;
+      if (nine && rd.holes.length >= at + 9 && nine.pars.some((p, i) => p !== rd.pars[at + i])) {
+        nine.pars.forEach((p, i) => { rd.pars[at + i] = p; });
+        persist(); render();
+        el.querySelector('#' + t.id)?.focus();
+        toast(`“${nine.name}” 코스의 파를 불러왔어요`);
         return;
       }
     } else if (t.id === 'f-temp') rd.temp = t.value === '' ? null : Number(t.value);

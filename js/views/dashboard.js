@@ -1,8 +1,8 @@
 import { db } from '../db.js';
 import { ic } from '../icons.js';
-import { analyze, rangeLabel } from '../stats.js';
+import { analyze, analyzeNines, rangeLabel } from '../stats.js';
 import { trendChart, penaltyChart, distBar, stackBar, hbars, heatmap } from '../charts.js';
-import { esc, f1, signed, fmtShort, weatherLabel, summarize } from '../util.js';
+import { esc, f1, signed, fmtShort, weatherLabel, summarize, expandNines, nineName } from '../util.js';
 import { pageHead, newRoundSheet } from '../ui.js';
 import { loadSamples } from '../sample.js';
 
@@ -14,13 +14,13 @@ export async function mount(el) {
   const [rounds, saved] = await Promise.all([db.rounds(), db.courses()]);
   if (!rounds.length) return renderEmpty(el);
 
-  const filters = { period: 'all', course: 'all', mode: undefined, heatCourse: '', heatMode: 'diff', ...load() };
+  const filters = { period: 'all', course: 'all', mode: undefined, heatCourse: '', heatNine: '', heatMode: 'diff', ...load() };
   const courses = [...new Set(rounds.map(r => r.course).filter(Boolean))];
   if (filters.course !== 'all' && !courses.includes(filters.course)) filters.course = 'all';
 
   const draw = () => {
     const s = analyze(rounds, filters);
-    el.innerHTML = pageHead({ title: '스코어 분석', sub: greeting(), right: '' }) + filterBar(filters, courses, s) + (s.empty ? emptyFiltered(rounds) : body(s, heatCard(rounds, saved, filters)));
+    el.innerHTML = pageHead({ title: '스코어 분석', sub: greeting(), right: '' }) + filterBar(filters, courses, s) + (s.empty ? emptyFiltered(rounds) : body(s, { heat: heatCard(rounds, saved, filters), nine: nineCard(rounds, filters) }));
     if (s.empty) return;
   };
   draw();
@@ -38,7 +38,8 @@ export async function mount(el) {
     if (e.target.closest('[data-new]')) newRoundSheet();
   };
   el.onchange = e => {
-    if (e.target.matches('#heat-course')) { filters.heatCourse = e.target.value; save(filters); redrawHeat(); return; }
+    if (e.target.matches('#heat-course')) { filters.heatCourse = e.target.value; filters.heatNine = ''; save(filters); redrawHeat(); return; }
+    if (e.target.matches('#heat-nine')) { filters.heatNine = e.target.value; save(filters); redrawHeat(); return; }
     if (e.target.matches('#course-filter')) { filters.course = e.target.value; save(filters); draw(); }
   };
 }
@@ -87,7 +88,7 @@ const trendBadge = t => {
   return `<span class="trend ${v < 0 ? 'good' : 'bad'}">${v < 0 ? '▼' : '▲'} ${Math.abs(v).toFixed(1)}타 ${v < 0 ? '개선' : '증가'}</span>`;
 };
 
-function body(s, heat) {
+function body(s, { heat, nine }) {
   const p = s.putts;
   const kpis = `<div class="kpis">
     <div class="card kpi hero">
@@ -135,7 +136,7 @@ function body(s, heat) {
   const course = s.byCourse.length > 1 ? `<div class="card"><h2>코스별 평균 타수</h2><p class="hint">파 대비 평균 · 베스트</p>${hbars(
     s.byCourse.map(c => ({ name: c.key, sub: `${c.n}회 · 베스트 ${c.best}`, v: c.diff, label: f1(c.avg) + '타' })), { signedScale: true, wide: true })}</div>` : '';
 
-  return kpis + mini + insights + `<div class="section-title"><span>상세 분석</span></div><div class="dash-grid">${trend}${dist}${pt}${putt}${pen}${half}${weather}${course}${heat}</div>`;
+  return kpis + mini + insights + `<div class="section-title"><span>상세 분석</span></div><div class="dash-grid">${trend}${dist}${pt}${putt}${pen}${half}${weather}${course}${nine}${heat}</div>`;
 }
 
 /** 홀별 평균 스코어 카드: 저장된 코스를 드롭다운으로 골라 그 코스만 분석한다 */
@@ -147,10 +148,18 @@ function heatCard(rounds, saved, f) {
   if (!names.length) return '';
   const mostPlayed = [...names].sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0))[0];
   const pick = names.includes(f.heatCourse) ? f.heatCourse : names.includes(f.course) ? f.course : mostPlayed;
-  const hs = analyze(rounds, { period: f.period, course: pick, mode: f.mode });
+  // 이 골프장에서 쓴 9홀 코스 이름들 (저장된 코스 + 기록에서 나온 이름)
+  const nineCount = new Map();
+  expandNines(done.filter(r => r.course === pick)).forEach(p => { if (p.nine) nineCount.set(p.nine, (nineCount.get(p.nine) || 0) + 1); });
+  (saved.find(c => c.name === pick)?.nines || []).forEach(n => { if (!nineCount.has(n.name)) nineCount.set(n.name, 0); });
+  const nineNames = [...nineCount.keys()].sort((a, b) => a.localeCompare(b, 'ko'));
+  const nine = nineNames.includes(f.heatNine) ? f.heatNine : '';
+  const hs = analyze(rounds, { period: f.period, course: pick, mode: nine ? 9 : f.mode, nine: nine || undefined });
 
   const select = `<select id="heat-course" class="input" aria-label="분석할 코스" style="min-height:44px">${names.map(n =>
     `<option value="${esc(n)}"${n === pick ? ' selected' : ''}>${esc(n)} · ${counts.get(n) ? `${counts.get(n)}회` : '기록 없음'}</option>`).join('')}</select>`;
+  const nineSelect = nineNames.length ? `<select id="heat-nine" class="input" aria-label="9홀 코스" style="min-height:44px;margin-top:8px">
+    <option value="">전체 · 전반+후반 통합</option>${nineNames.map(n => `<option value="${esc(n)}"${n === nine ? ' selected' : ''}>${esc(n)} 코스 · ${nineCount.get(n) ? `${nineCount.get(n)}회` : '기록 없음'}</option>`).join('')}</select>` : '';
   const toggle = `<div class="seg" role="group" aria-label="표시 방식" style="margin-top:8px">
     <button data-heat="diff" class="${f.heatMode !== 'strokes' ? 'on' : ''}">파 대비</button><button data-heat="strokes" class="${f.heatMode === 'strokes' ? 'on' : ''}">평균 타수</button></div>`;
 
@@ -162,10 +171,22 @@ function heatCard(rounds, saved, f) {
     const hard = [...ranked].sort((a, b) => b.avg - a.avg).slice(0, 3);
     const good = [...ranked].sort((a, b) => a.avg - b.avg).slice(0, 3);
     const line = (label, list) => list.length ? `<div class="small" style="margin-top:6px"><span class="muted">${label}</span> ${list.map(h => `<b>${h.i + 1}번</b>(파${h.par}, ${signed(h.avg, 1)})`).join(' · ')}</div>` : '';
-    inner = `<p class="small muted" style="margin:12px 0 10px">${hs.n}회 라운드 · 평균 <b>${f1(hs.avg)}타</b> · 베스트 <b>${hs.best.score}타</b> (${hs.mode}홀 기준)</p>
+    inner = `<p class="small muted" style="margin:12px 0 10px">${hs.n}회 라운드 · 평균 <b>${f1(hs.avg)}타</b> · 베스트 <b>${hs.best.score}타</b> (${hs.mode}홀 기준${nine ? ` · ${esc(nine)} 코스` : ''})</p>
       ${heatmap(hs.holeStats, f.heatMode)}
       ${hs.n < 3 ? '<p class="small muted" style="margin:10px 0 0">라운드가 3회 이상 쌓이면 홀별 경향이 더 정확해져요.</p>' : ''}
       ${line('어려운 홀', hard)}${line('잘 치는 홀', good)}`;
   }
-  return `<div class="card wide" id="heat-card"><h2>홀별 평균 스코어</h2><p class="hint">저장된 코스를 골라 홀마다 얼마나 어려운지 확인하세요</p>${select}${toggle}${inner}</div>`;
+  return `<div class="card wide" id="heat-card"><h2>홀별 평균 스코어</h2><p class="hint">골프장과 9홀 코스(서·남 등)를 골라 홀마다 얼마나 어려운지 확인하세요</p>${select}${nineSelect}${toggle}${inner}</div>`;
+}
+
+/** 9홀 코스(서/남/동 등)별 평균: 전반·후반 9홀을 각각 그 코스의 한 번으로 센다 */
+function nineCard(rounds, f) {
+  const list = analyzeNines(rounds, { period: f.period, course: f.course });
+  const anyNamed = rounds.some(r => nineName(r, 0) || nineName(r, 1));
+  if (!list.length) {
+    return anyNamed ? '' : `<div class="card"><h2>9홀 코스별 평균</h2><p class="hint" style="margin:0">라운드에 전반·후반 코스 이름(예: 서, 남)을 입력하면 코스별로 평균을 비교해요.</p></div>`;
+  }
+  const clubs = new Set(list.map(x => x.course));
+  return `<div class="card"><h2>9홀 코스별 평균</h2><p class="hint">코스별 9홀 평균 타수 · 막대는 파 대비 (${list.reduce((a, b) => a + b.n, 0)}회)</p>${hbars(
+    list.map(x => ({ name: x.nine, sub: (clubs.size > 1 ? `${x.course} · ` : '') + `${x.n}회 · 베스트 ${x.best}`, v: x.diff, label: f1(x.avg) + '타' })), { signedScale: true, wide: true })}</div>`;
 }

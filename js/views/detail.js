@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { ic } from '../icons.js';
-import { esc, summarize, signed, fmtDate, weatherIcon, weatherLabel, sum, tClass, catOf, scoreName } from '../util.js';
+import { esc, summarize, signed, fmtDate, weatherIcon, weatherLabel, sum, tClass, catOf, scoreName, nineName } from '../util.js';
 import { pageHead, confirmDialog, toast } from '../ui.js';
 
 const shapeOf = d => {
@@ -24,7 +24,7 @@ function nineTable(r, from) {
   const row = (label, fn, total) => `<tr><th class="rl">${label}</th>${idx.map(fn).join('')}<td class="tot">${total}</td></tr>`;
   const label = from === 0 ? (r.holes.length === 9 ? 'TOTAL' : 'OUT') : 'IN';
   return `<div class="sc-wrap"><table class="sc">
-    <thead><tr><th class="rl">홀</th>${idx.map(i => `<th>${i + 1}</th>`).join('')}<th class="tot">${label}</th></tr></thead>
+    <thead><tr><th class="rl" title="${esc(nineName(r, from / 9))}">${esc(nineName(r, from / 9)) || '홀'}</th>${idx.map(i => `<th>${i + 1}</th>`).join('')}<th class="tot">${label}</th></tr></thead>
     <tbody>
       ${row('파', i => `<td>${r.pars[i]}</td>`, parSum)}
       ${row('스코어', i => `<td>${cell(r.holes[i].score, r.pars[i])}</td>`, played.length ? sc : '–')}
@@ -47,6 +47,7 @@ export async function mount(el, { id }) {
       ${r.time ? `<span>${ic('clock', 16)} ${r.time} 티오프</span>` : ''}
       <span>${weatherIcon(r.weather)} ${weatherLabel(r.weather)}${r.temp != null ? ` · ${r.temp}°C` : ''}</span>
       <span>${ic('flag', 16)} ${r.holes.length}홀 · 파 ${s.parTotal}</span>
+      ${nineName(r, 0) || nineName(r, 1) ? `<span>${ic('pin', 16)} ${esc(nineName(r, 0) || '전반')}${r.holes.length >= 18 ? ` → ${esc(nineName(r, 1) || '후반')}` : ''}</span>` : ''}
     </div>
     ${s.complete ? '' : `<div class="info"><span class="badge warn">${s.filled}/${s.n}홀 입력됨 · 미완료 라운드는 분석에서 제외돼요</span></div>`}
   </div>

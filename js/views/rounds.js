@@ -1,6 +1,6 @@
 import { db } from '../db.js';
 import { ic } from '../icons.js';
-import { esc, sortRounds, summarize, signed, diffClass, dow, weatherIcon, weatherLabel, parseDate } from '../util.js';
+import { esc, sortRounds, summarize, signed, diffClass, dow, weatherIcon, weatherLabel, parseDate, nineName } from '../util.js';
 import { pageHead, newRoundSheet } from '../ui.js';
 
 export async function mount(el) {
@@ -31,7 +31,7 @@ function item(r) {
     : `<div class="score"><span class="badge warn">${s.filled}/${s.n}홀</span></div>`;
   return `<a class="round-item" href="#/round/${r.id}">
     <div class="date"><b>${d.getDate()}</b><small>${dow(r.date)}</small></div>
-    <div><div class="name">${esc(r.course || '코스 미입력')}${r.holes.length === 9 ? ' <span class="badge">9H</span>' : ''}${r.sample ? ' <span class="badge">샘플</span>' : ''}</div>
+    <div><div class="name">${esc(r.course || '코스 미입력')}${nineName(r, 0) || nineName(r, 1) ? ` <span class="badge">${esc(nineName(r, 0) || '전반')}${r.holes.length >= 18 ? `→${esc(nineName(r, 1) || '후반')}` : ''}</span>` : ''}${r.holes.length === 9 ? ' <span class="badge">9H</span>' : ''}${r.sample ? ' <span class="badge">샘플</span>' : ''}</div>
       <div class="meta"><span>${weatherIcon(r.weather)} ${weatherLabel(r.weather)}${r.temp != null ? ` ${r.temp}°` : ''}</span>
       <span>${r.time || ''}</span>${s.puttsN ? `<span>퍼팅 ${s.putts}</span>` : ''}${s.ob ? `<span>OB ${s.ob}</span>` : ''}${s.hz ? `<span>해저드 ${s.hz}</span>` : ''}</div></div>
     ${scoreBlock}</a>`;

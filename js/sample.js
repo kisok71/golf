@@ -1,10 +1,21 @@
 import { db } from './db.js';
 import { dateStr, uid } from './util.js';
 
+/* 골프장마다 9홀 코스가 여러 개 있고, 라운드마다 전반/후반 코스를 조합해서 친다 */
 const COURSES = [
-  { name: '레이크사이드 CC', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 5, 3, 4, 4, 4, 3, 5, 4] },
-  { name: '그린힐 CC', pars: [5, 4, 4, 3, 4, 4, 3, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5, 4] },
-  { name: '파인밸리 CC', pars: [4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 5, 3, 4, 4, 3, 5, 4, 4] }
+  { name: '레이크사이드 CC', nines: [
+    { name: '서', pars: [4, 4, 3, 5, 4, 4, 3, 4, 5] },
+    { name: '남', pars: [4, 5, 3, 4, 4, 4, 3, 5, 4] },
+    { name: '동', pars: [5, 4, 4, 3, 4, 4, 3, 5, 4] }
+  ] },
+  { name: '그린힐 CC', nines: [
+    { name: '레이크', pars: [5, 4, 4, 3, 4, 4, 3, 5, 4] },
+    { name: '밸리', pars: [4, 3, 5, 4, 4, 3, 4, 5, 4] }
+  ] },
+  { name: '파인밸리 CC', nines: [
+    { name: '힐', pars: [4, 3, 5, 4, 4, 3, 4, 5, 4] },
+    { name: '마운틴', pars: [4, 5, 3, 4, 4, 3, 5, 4, 4] }
+  ] }
 ];
 const WEATHERS = ['sunny', 'sunny', 'sunny', 'partly', 'partly', 'cloudy', 'cloudy', 'rain', 'windy'];
 const TIMES = ['06:30', '07:12', '07:48', '08:24', '09:36', '11:00', '12:30'];
@@ -29,11 +40,16 @@ export async function loadSamples(count = 22) {
     const t = k / (count - 1);
     const skill = 1.55 - 1.2 * t;
     const course = COURSES[Math.floor(rand() * COURSES.length)];
+    const fi = Math.floor(rand() * course.nines.length);
+    let bi = Math.floor(rand() * (course.nines.length - 1));
+    if (bi >= fi) bi++;
+    const front = course.nines[fi], back = course.nines[bi];
+    const pars = [...front.pars, ...back.pars];
     const d = new Date(today); d.setDate(d.getDate() - Math.round((count - 1 - k) * 11 + rand() * 4));
     if (d > today) d.setTime(today.getTime());
     const weather = WEATHERS[Math.floor(rand() * WEATHERS.length)];
     const windy = weather === 'windy' || weather === 'rain' ? 0.18 : 0;
-    const holes = course.pars.map((par, i) => {
+    const holes = pars.map((par, i) => {
       const parAdj = par === 5 ? 0.22 : par === 3 ? 0.05 : 0;
       const backAdj = i >= 9 ? 0.08 : 0;
       let diff = Math.round(skill + parAdj + backAdj + windy + gauss() * 1.0);
@@ -49,11 +65,15 @@ export async function loadSamples(count = 22) {
       return { score, putts, ob, hazard };
     });
     rounds.push({
-      id: uid() + k, date: dateStr(d), time: TIMES[Math.floor(rand() * TIMES.length)], course: course.name, weather,
-      temp: Math.round(MONTH_TEMP[d.getMonth()] + (rand() - 0.5) * 6), pars: [...course.pars], holes, memo: '',
+      id: uid() + k, date: dateStr(d), time: TIMES[Math.floor(rand() * TIMES.length)], course: course.name,
+      frontName: front.name, backName: back.name, weather,
+      temp: Math.round(MONTH_TEMP[d.getMonth()] + (rand() - 0.5) * 6), pars, holes, memo: '',
       createdAt: Date.now() + k, sample: true
     });
   }
-  await db.putMany(rounds, COURSES.map(c => ({ name: c.name, pars: c.pars, holes: 18 })));
+  await db.putMany(rounds, COURSES.map(c => ({
+    name: c.name, pars: [...c.nines[0].pars, ...c.nines[1].pars], holes: 18,
+    front: c.nines[0].name, back: c.nines[1].name, nines: c.nines
+  })));
   return rounds.length;
 }

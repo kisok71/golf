@@ -1,12 +1,13 @@
-import { CATS, catOf, mean, sortRounds, summarize, sum, fmtShort } from './util.js';
+import { CATS, catOf, mean, sortRounds, summarize, sum, fmtShort, expandNines } from './util.js';
 
 /**
  * 완성된 라운드만 대상으로 분석한다.
- * opts: { period: 'all'|'last10'|'year', course: 'all'|이름, mode: 18|9|undefined }
+ * opts: { period: 'all'|'last10'|'year', course: 'all'|이름, mode: 18|9|undefined, nine: 9홀 코스 이름(지정하면 그 9홀만 분석) }
  */
 export function analyze(all, opts = {}) {
   const { period = 'all', course = 'all' } = opts;
-  let rs = sortRounds(all).map(r => ({ r, s: summarize(r) })).filter(x => x.s.complete);
+  const source = opts.nine ? expandNines(all).filter(r => r.nine === opts.nine) : all;
+  let rs = sortRounds(source).map(r => ({ r, s: summarize(r) })).filter(x => x.s.complete);
   if (course !== 'all') rs = rs.filter(x => x.r.course === course);
   if (period === 'year') { const y = String(new Date().getFullYear()); rs = rs.filter(x => x.r.date.startsWith(y)); }
 
@@ -144,3 +145,26 @@ const fmt = n => (n > 0 ? `+${n.toFixed(1)}` : n.toFixed(1));
 const WN = { sunny: '맑은', partly: '구름조금', cloudy: '흐린', rain: '비 오는', windy: '바람 부는', snow: '눈 오는' };
 const wname = k => WN[k] || k;
 export const rangeLabel = s => `${fmtShort(s.series[0].date)} – ${fmtShort(s.series[s.series.length - 1].date)}`;
+
+/**
+ * 골프장의 9홀 코스(서/남/동 등)별 성적. 전반·후반 9홀을 각각 그 코스의 한 번으로 센다.
+ * 이름이 없는 9홀은 제외한다. 반환: [{ course, nine, n, avg, diff, best }] (파 대비 좋은 순)
+ */
+export function analyzeNines(all, { period = 'all', course = 'all' } = {}) {
+  let rs = sortRounds(all);
+  if (course !== 'all') rs = rs.filter(r => r.course === course);
+  if (period === 'year') { const y = String(new Date().getFullYear()); rs = rs.filter(r => r.date.startsWith(y)); }
+  if (period === 'last10') rs = rs.slice(-10);
+  const groups = new Map();
+  for (const p of expandNines(rs)) {
+    if (!p.nine) continue;
+    const s = summarize(p);
+    if (!s.complete) continue;
+    const key = p.course + '\u0000' + p.nine;
+    if (!groups.has(key)) groups.set(key, { course: p.course, nine: p.nine, scores: [], diffs: [] });
+    const g = groups.get(key);
+    g.scores.push(s.score); g.diffs.push(s.diff);
+  }
+  return [...groups.values()].map(g => ({ course: g.course, nine: g.nine, n: g.scores.length, avg: mean(g.scores), diff: mean(g.diffs), best: Math.min(...g.scores) }))
+    .sort((a, b) => a.diff - b.diff);
+}

@@ -62,7 +62,7 @@ export function openCoursePicker({ query, saved = [], onApply }) {
     el.innerHTML = `<div class="grab"></div>${body}`;
   };
 
-  const apply = (name, pars) => { s.close(); onApply({ name, pars }); };
+  const apply = (name, pars, extra = {}) => { s.close(); onApply({ name, pars, ...extra }); };
 
   async function runSearch() {
     results = null; error = ''; render();
@@ -99,7 +99,10 @@ export function openCoursePicker({ query, saved = [], onApply }) {
       case 'paste': mode = 'paste'; render(); break;
       case 'apply-nines': {
         const f = Number(el.querySelector('#n-front').value), k = Number(el.querySelector('#n-back').value);
-        apply(selected.name, [...sets.nines[f].pars, ...(k >= 0 ? sets.nines[k].pars : [])]);
+        apply(selected.name, [...sets.nines[f].pars, ...(k >= 0 ? sets.nines[k].pars : [])], {
+          frontName: sets.nines[f].label, backName: k >= 0 ? sets.nines[k].label : '',
+          nines: sets.nines.map(n => ({ name: n.label, pars: n.pars.map(p => p ?? 4) }))
+        });
         break;
       }
       case 'apply-paste': {

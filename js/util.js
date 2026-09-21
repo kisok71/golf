@@ -92,6 +92,30 @@ export function summarize(r) {
   return { n, score, par, diff: score - par, putts, puttsN, ob, hz, filled, complete: filled === n, gir, girN, parTotal: sum(r.pars) };
 }
 
+/** 라운드의 전반(0)/후반(1) 9홀 코스 이름 */
+export const nineName = (r, half) => String((half === 0 ? r.frontName : r.backName) || '').trim();
+
+/** 라운드를 9홀 단위로 쪼갠다. 18홀은 전반·후반 2개, 9홀은 1개. 각 조각에 nine(코스 이름)과 half를 붙인다 */
+export function expandNines(rounds) {
+  const out = [];
+  for (const r of rounds) {
+    const halves = r.holes.length >= 18 ? [0, 1] : [0];
+    for (const h of halves) {
+      out.push({ ...r, id: `${r.id}#${h}`, holes: r.holes.slice(h * 9, h * 9 + 9), pars: r.pars.slice(h * 9, h * 9 + 9), nine: nineName(r, h), half: h, parentId: r.id });
+    }
+  }
+  return out;
+}
+
+/** 저장할 코스 기록을 만든다. 전반/후반 9홀 코스 이름별 파를 누적해 둔다 */
+export function courseRecord(existing, rd) {
+  const nines = new Map((existing?.nines || []).map(n => [n.name, n.pars]));
+  const f = nineName(rd, 0), b = rd.holes.length >= 18 ? nineName(rd, 1) : '';
+  if (f) nines.set(f, rd.pars.slice(0, 9));
+  if (b) nines.set(b, rd.pars.slice(9, 18));
+  return { ...(existing || {}), name: rd.course, pars: rd.pars, holes: rd.holes.length, front: f, back: b, nines: [...nines].map(([name, pars]) => ({ name, pars })) };
+}
+
 export function downloadFile(name, text, type = 'application/json') {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([text], { type }));
