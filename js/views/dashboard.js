@@ -2,7 +2,7 @@ import { db } from '../db.js';
 import { ic } from '../icons.js';
 import { analyze, analyzeNines, estimateHandicap, rangeLabel } from '../stats.js';
 import { trendChart, penaltyChart, distBar, stackBar, hbars, heatmap } from '../charts.js';
-import { esc, f1, signed, fmtShort, weatherLabel, summarize, expandNines, nineName } from '../util.js';
+import { esc, f1, signed, fmtShort, fmtDate, mean, diffClass, weatherIcon, weatherLabel, summarize, expandNines, nineName } from '../util.js';
 import { pageHead, newRoundSheet } from '../ui.js';
 import { loadSamples } from '../sample.js';
 
@@ -152,7 +152,30 @@ function body(s, { heat, nine, hcp }) {
   const course = s.byCourse.length > 1 ? `<div class="card"><h2>코스별 평균 타수</h2><p class="hint">파 대비 평균 · 베스트</p>${hbars(
     s.byCourse.map(c => ({ name: c.key, sub: `${c.n}회 · 베스트 ${c.best}`, v: c.diff, label: f1(c.avg) + '타' })), { signedScale: true, wide: true })}</div>` : '';
 
-  return kpis + mini + insights + `<div class="section-title"><span>상세 분석</span></div><div class="dash-grid">${trend}${dist}${pt}${putt}${fwc}${pen}${half}${weather}${course}${nine}${heat}</div>`;
+  return kpis + mini + insights + `<div class="section-title"><span>상세 분석</span></div><div class="dash-grid">${trend}${topCard(s)}${dist}${pt}${putt}${fwc}${pen}${half}${weather}${course}${nine}${heat}</div>`;
+}
+
+/** 베스트 스코어 TOP 10: 날짜 · 골프장 · 스코어와 라운드별 주요 지표. 행을 누르면 라운드 상세로 이동 */
+function topCard(s) {
+  const t = s.top;
+  const topAvg = mean(t.map(x => x.score));
+  const clubs = new Map();
+  t.forEach(x => clubs.set(x.course, (clubs.get(x.course) || 0) + 1));
+  const [club, clubN] = [...clubs].sort((a, b) => b[1] - a[1])[0] || [];
+  const gap = s.avg - topAvg;
+  const summary = t.length >= 2 ? `<p class="small" style="margin:0 0 12px">TOP ${t.length} 평균 <b>${f1(topAvg)}타</b>${gap >= 0.1 ? ` · 전체 평균보다 <b>${gap.toFixed(1)}타</b> 적어요` : ''}${clubN >= 2 ? ` · <b>${esc(club)}</b>에서 ${clubN}회` : ''}</p>` : '';
+  const pct = v => (v == null ? null : Math.round(v * 100) + '%');
+  const rows = t.map((x, i) => {
+    const nines = x.front || x.back ? ` <span class="badge">${esc(x.front || '전반')}${s.mode >= 18 ? `→${esc(x.back || '후반')}` : ''}</span>` : '';
+    const meta = [x.putts != null && `퍼팅 ${x.putts}`, `OB ${x.ob}`, `해저드 ${x.hz}`, pct(x.fw) && `FW ${pct(x.fw)}`, pct(x.gir) && `GIR ${pct(x.gir)}`].filter(Boolean).join(' · ');
+    return `<a class="top-row" href="#/round/${x.id}">
+      <span class="rk${i < 3 ? ' medal' : ''}">${i + 1}</span>
+      <div class="info"><div class="name">${esc(x.course || '코스 미입력')}${nines}</div>
+        <div class="meta">${fmtDate(x.date)} · ${weatherIcon(x.weather)} ${weatherLabel(x.weather)}${x.temp != null ? ` ${x.temp}°` : ''}</div>
+        <div class="meta">${meta}</div></div>
+      <div class="sc"><b class="num">${x.score}</b><small class="${diffClass(x.diff)}">${signed(x.diff)}</small></div></a>`;
+  }).join('');
+  return `<div class="card wide"><h2>베스트 스코어 TOP ${t.length}</h2><p class="hint">${s.mode}홀 ${s.n}라운드 중 타수가 낮은 순 · 누르면 상세 기록</p>${summary}<div class="top-list">${rows}</div></div>`;
 }
 
 /** 홀별 평균 스코어 카드: 저장된 코스를 드롭다운으로 골라 그 코스만 분석한다 */

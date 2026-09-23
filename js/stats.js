@@ -1,4 +1,4 @@
-import { CATS, catOf, mean, sortRounds, summarize, sum, fmtShort, expandNines, differential } from './util.js';
+import { CATS, catOf, mean, sortRounds, summarize, sum, fmtShort, expandNines, differential, nineName } from './util.js';
 
 /**
  * 완성된 라운드만 대상으로 분석한다.
@@ -95,7 +95,15 @@ export function analyze(all, opts = {}) {
     putts: x.s.puttsN === x.s.n ? x.s.putts : null, ob: x.s.ob, hz: x.s.hz
   }));
 
-  const stats = { empty: false, mode, modes, n, avg, avgDiff, best, trend, dist, holeCount: holes.length, parType, putts, gir, fairway, par3, obPer, hzPer, holeStats, trouble, half, byWeather, byCourse, series, opts };
+  // 베스트 스코어 TOP 10: 타수가 같으면 먼저 기록한 라운드가 위
+  const top = rs.map((x, k) => ({ x, k })).sort((a, b) => a.x.s.score - b.x.s.score || a.k - b.k).slice(0, 10).map(({ x: { r, s } }) => ({
+    id: r.id, date: r.date, course: r.course, front: nineName(r, 0), back: r.holes.length >= 18 ? nineName(r, 1) : '',
+    weather: r.weather, temp: r.temp, score: s.score, diff: s.diff,
+    putts: s.puttsN === s.n ? s.putts : null, ob: s.ob, hz: s.hz,
+    fw: s.fwN ? s.fwHit / s.fwN : null, gir: s.girN ? s.gir / s.girN : null
+  }));
+
+  const stats = { empty: false, mode, modes, n, avg, avgDiff, best, trend, dist, holeCount: holes.length, parType, putts, gir, fairway, par3, obPer, hzPer, holeStats, trouble, half, byWeather, byCourse, series, top, opts };
   stats.insights = makeInsights(stats);
   return stats;
 }
