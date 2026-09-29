@@ -2,6 +2,7 @@ import { ic } from '../icons.js';
 import { esc } from '../util.js';
 import { sheet } from '../ui.js';
 import { loadKga, searchClubs, rankCombos, teesOf, averages, KGA_CALC_URL } from '../kga.js';
+import { loadMcst, findSingleSite, siteSummary } from '../mcst.js';
 
 const SEX = 'gn.gender';
 export const getSex = () => { try { return localStorage.getItem(SEX) === '1' ? 1 : 0; } catch { return 0; } };
@@ -17,6 +18,7 @@ export function openKgaPicker({ query = '', front = '', back = '', onApply }) {
   const s = sheet('', { onClose: () => ctl.abort() });
   const el = s.el;
   let data = null, error = '', sex = getSex(), q = query.trim(), club = null, course = null;
+  let mcst = null; // 문체부 전국 골프장 현황: 동명 골프장이 여럿일 때 지역·주소를 참고로 보여준다 (확실할 때만)
 
   const skeleton = () => {
     el.innerHTML = `<div class="grab"></div><h3>KGA 공식 레이팅</h3>
@@ -53,8 +55,15 @@ export function openKgaPicker({ query = '', front = '', back = '', onApply }) {
 
     if (!q.trim()) { box.innerHTML = '<p class="small muted" style="margin:6px 0">골프장 이름을 입력하면 찾아요.</p>'; return; }
     const found = searchClubs(data, q, 8);
+    // 문체부 자료에서 확실한 위치(지역·주소가 하나뿐인 경우)를 찾으면 참고로 붙인다. 동명이인 골프장이 있으면 붙이지 않는다
+    const ref = m => {
+      const hit = mcst && findSingleSite(mcst, m.club.name);
+      if (!hit) return '';
+      const sum = siteSummary(hit.site);
+      return ` · ${esc(hit.site.region)} ${esc(hit.site.addr)}${sum.holesText ? ` · ${esc(sum.holesText)}` : ''}`;
+    };
     box.innerHTML = found.length
-      ? `<div class="list">${found.map((m, i) => `<button class="li" data-club="${i}"><span class="ico">${ic('flag')}</span><div class="grow"><b>${esc(m.club.name)}</b><div class="small muted">코스 조합 ${new Set(m.club.rows.map(r => r.course)).size}개</div></div>${ic('chev')}</button>`).join('')}</div>`
+      ? `<div class="list">${found.map((m, i) => `<button class="li" data-club="${i}"><span class="ico">${ic('flag')}</span><div class="grow"><b>${esc(m.club.name)}</b><div class="small muted">코스 조합 ${new Set(m.club.rows.map(r => r.course)).size}개${ref(m)}</div></div>${ic('chev')}</button>`).join('')}</div>`
       : `<div class="banner" style="background:color-mix(in srgb,#eda100 18%,transparent);color:var(--ink)">${ic('info', 18)}<span class="grow">“${esc(q)}” 검색 결과가 앱에 들어 있는 KGA 자료에 없어요. 아래 <b>KGA 사이트에서 검색</b>해 보고, 거기에도 없으면 <b>평균값으로 임시 입력</b>하세요.</span></div>`;
     box._found = found;
   };
@@ -99,6 +108,7 @@ export function openKgaPicker({ query = '', front = '', back = '', onApply }) {
     if (top && top.score <= 2) club = top.club; // 이름이 잘 맞으면 바로 조합·티 선택으로
     renderResults();
   }).catch(err => { error = err.message || '레이팅 자료를 불러오지 못했어요'; renderResults(); });
+  loadMcst().then(d => { mcst = d; if (!club) renderResults(); }).catch(() => { /* 참고 정보일 뿐이라 실패해도 조용히 넘어간다 */ });
   return s;
 }
 

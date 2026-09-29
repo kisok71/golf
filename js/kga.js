@@ -1,5 +1,6 @@
 /* 대한골프협회(KGA) 코스레이팅 현황 데이터 (data/kga-ratings.json, tools/build-ratings.py로 생성)를
  * 검색하는 모듈. 앱에 포함된 파일을 읽으므로 인터넷 없이 동작한다. */
+import { normGolfName } from './util.js';
 
 /** KGA 핸디캡 계산기 페이지 — 앱 자료에 없는 골프장은 여기서 코스레이팅·슬로프를 찾아볼 수 있다 */
 export const KGA_CALC_URL = 'https://www.kgagolf.or.kr/web/handicap/calculator';
@@ -25,10 +26,8 @@ export async function loadKga() {
   return cache;
 }
 
-/** 공백·기호와 "CC/컨트리클럽/골프클럽" 같은 꼬리표를 떼어 비교용 키로 만든다 */
-export function normClub(s) {
-  return String(s || '').toLowerCase().replace(/[\s\-_.()·]/g, '').replace(/(컨트리클럽|골프클럽|골프장|골프앤리조트|cc)$/g, '');
-}
+/** util.js의 정규화를 그대로 쓴다 (다른 모듈에서 이 이름으로 이미 가져다 쓰고 있어 그대로 둔다) */
+export const normClub = normGolfName;
 
 /**
  * 이름으로 골프장을 찾는다. 점수가 낮을수록 잘 맞는다: 0 정확히 같음 · 1 앞부분 일치 · 2 포함 · 3 검색어가 이름을 포함

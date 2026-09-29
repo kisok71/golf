@@ -112,6 +112,15 @@ export function splitNines(text) {
   return { front: m[2], back: m[3], rest };
 }
 
+/**
+ * 골프장 이름 비교용 정규화: 공백·기호를 지우고 "컨트리클럽/골프클럽/골프장/CC/GC" 같은 흔한 꼬리표를 뗀다.
+ * "화성 상록G.C"와 "화성상록"처럼 표기가 달라도 같은 골프장으로 찾을 수 있게 해준다.
+ * KGA 레이팅 검색(js/kga.js)과 문체부 전국 골프장 현황 검색(js/mcst.js)이 함께 쓴다.
+ */
+export function normGolfName(s) {
+  return String(s || '').toLowerCase().replace(/[\s\-_.()·]/g, '').replace(/(컨트리클럽|골프클럽|골프앤리조트|골프장|cc|gc)$/g, '');
+}
+
 /* 코스 레이팅(난이도 평가값)과 슬로프(상대 난이도, 113이 표준) */
 export const validRating = v => Number.isFinite(v) && v >= 25 && v <= 80;
 export const validSlope = v => Number.isInteger(v) && v >= 55 && v <= 155;
