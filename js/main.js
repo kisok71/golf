@@ -5,6 +5,7 @@ import { applyTheme } from './views/settings.js';
 const routes = [
   [/^#\/?$/, () => import('./views/dashboard.js'), 'dash'],
   [/^#\/rounds$/, () => import('./views/rounds.js'), 'rounds'],
+  [/^#\/round\/([^/]+)\/card$/, () => import('./views/scorecardview.js'), 'rounds'],
   [/^#\/round\/(.+)$/, () => import('./views/detail.js'), 'rounds'],
   [/^#\/new$/, () => import('./views/editor.js'), 'flow'],
   [/^#\/edit\/(.+)$/, () => import('./views/editor.js'), 'flow'],

@@ -73,7 +73,8 @@ export async function mount(el, { id }) {
   ${r.memo ? `<div class="section-title"><span>메모</span></div><div class="card"><p style="margin:0;white-space:pre-wrap">${esc(r.memo)}</p></div>` : ''}
   ${r.image ? `<div class="section-title"><span>스코어카드 사진</span></div><img class="photo" src="${r.image}" alt="스코어카드 사진">` : ''}
 
-  <div class="grid-2" style="margin-top:20px">
+  <a class="btn soft block" href="#/round/${r.id}/card" style="margin-top:20px">${ic('list')} 정식 스코어카드 보기</a>
+  <div class="grid-2" style="margin-top:10px">
     <a class="btn secondary" href="#/edit/${r.id}">${ic('edit')} 수정</a>
     <button class="btn danger" id="del">${ic('trash')} 삭제</button>
   </div>`;

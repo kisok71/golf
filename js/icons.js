@@ -30,6 +30,7 @@ const P = {
   snow: '<path d="M12 3v18M4.2 7.5l15.6 9M19.8 7.5l-15.6 9"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  printer: '<path d="M6 8V4h12v4"/><rect x="4" y="8" width="16" height="8" rx="2"/><path d="M8 14h8v6H8z"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z"/>'
 };
 

@@ -293,6 +293,23 @@ table.sc tbody tr:last-child td, table.sc tbody tr:last-child th { border-bottom
 .detail-hero .info span { display: inline-flex; align-items: center; gap: 5px; }
 .photo { width: 100%; border-radius: 14px; display: block; border: 1px solid var(--line); }
 
+/* 정식 스코어카드 화면 */
+.player-name { font-size: 22px; font-weight: 800; letter-spacing: -.01em; line-height: 1.2; overflow-wrap: anywhere; }
+table.sc th.rl.score-row { color: var(--ink); font-size: 13px; font-weight: 800; }
+.score-total-line { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); font-weight: 600; }
+.score-total-line b { color: var(--ink); font-size: 15px; margin-left: 4px; }
+
+@media print {
+  #tabbar, .page-head, .no-print { display: none !important; }
+  body { background: #fff; }
+  #app { padding: 0; max-width: 100%; }
+  .score-card-hero { background: #fff !important; color: #000 !important; box-shadow: none; border: 1px solid #ccc; }
+  .score-card-hero::after { display: none; }
+  .score-card-hero .diff { background: none; border: 1px solid #000; }
+  .score-card-hero .info { color: #333; }
+  .score-card-sheet { box-shadow: none; border: 1px solid #ccc; }
+}
+
 /* ── 폼 ── */
 .field { display: grid; gap: 6px; margin-bottom: 14px; }
 .field > label, .field > .lb { font-size: 13px; font-weight: 700; color: var(--ink-2); }
