@@ -1,6 +1,6 @@
 import { ic } from '../icons.js';
 import { esc } from '../util.js';
-import { sheet } from '../ui.js';
+import { sheet, sheetHead } from '../ui.js';
 import { searchCourses, fetchHoles, buildHoleSets, parsePastedPars } from '../coursesearch.js';
 import { loadMcst, searchMcst, findSingleSite, siteSummary } from '../mcst.js';
 
@@ -87,7 +87,7 @@ export function openCoursePicker({ query, saved = [], onApply }) {
         <div id="paste-msg" class="small" style="min-height:20px;margin-bottom:6px"></div>
         <div class="btns"><button class="btn secondary" data-a="back">뒤로</button><button class="btn" data-a="apply-paste">적용</button></div>`;
     }
-    el.innerHTML = `<div class="grab"></div>${body}`;
+    el.innerHTML = `${sheetHead()}${body}`;
   };
 
   const apply = (name, pars, extra = {}) => { s.close(); onApply({ name, pars, ...extra }); };

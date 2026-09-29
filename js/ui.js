@@ -9,13 +9,17 @@ export function toast(msg, ms = 2200) {
   toastTimer = setTimeout(() => (t.hidden = true), ms);
 }
 
-/** 하단 시트. content는 HTML 문자열, 반환값은 { el, close } */
+/** 손잡이 막대 + 닫기(×) 버튼 한 줄. 시트 내용을 스스로 다시 그리는 화면(코스 검색 등)에서 맨 앞에 넣는다.
+ * 닫기 버튼 클릭은 sheet()가 오버레이에 달아 둔 위임 리스너가 처리하므로, 이 줄만 넣으면 따로 연결할 코드가 필요 없다. */
+export const sheetHead = () => `<div class="sheet-head"><div class="grab"></div><button class="sheet-close" aria-label="닫기">${ic('close', 16)}</button></div>`;
+
+/** 하단 시트. content는 HTML 문자열, 반환값은 { el, close }. 바깥을 탭하거나 우상단 닫기 버튼으로 닫을 수 있다 */
 export function sheet(content, { onClose } = {}) {
   const ov = document.createElement('div');
   ov.className = 'overlay';
-  ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${content}</div>`;
+  ov.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${sheetHead()}${content}</div>`;
   const close = () => { if (!ov.isConnected) return; ov.remove(); onClose?.(); };
-  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  ov.addEventListener('click', e => { if (e.target === ov || e.target.closest('.sheet-close')) close(); });
   document.body.appendChild(ov);
   return { el: ov.firstElementChild, close };
 }

@@ -1,6 +1,6 @@
 import { ic } from '../icons.js';
 import { esc } from '../util.js';
-import { sheet } from '../ui.js';
+import { sheet, sheetHead } from '../ui.js';
 import { loadKga, searchClubs, rankCombos, teesOf, averages, KGA_CALC_URL } from '../kga.js';
 import { loadMcst, findSingleSite, siteSummary } from '../mcst.js';
 
@@ -21,7 +21,7 @@ export function openKgaPicker({ query = '', front = '', back = '', onApply }) {
   let mcst = null; // 문체부 전국 골프장 현황: 동명 골프장이 여럿일 때 지역·주소를 참고로 보여준다 (확실할 때만)
 
   const skeleton = () => {
-    el.innerHTML = `<div class="grab"></div><h3>KGA 공식 레이팅</h3>
+    el.innerHTML = `${sheetHead()}<h3>KGA 공식 레이팅</h3>
       <p class="small muted" style="margin:0 0 10px">대한골프협회 코스레이팅 현황${data?.date ? ` (${esc(data.date)} 기준)` : ''}에서 골프장과 티를 골라요.</p>
       <div class="seg" role="group" aria-label="성별" style="margin-bottom:10px"><button data-sex="0" class="${sex === 0 ? 'on' : ''}">남자 티</button><button data-sex="1" class="${sex === 1 ? 'on' : ''}">여자 티</button></div>
       <div class="field"><input id="kga-q" class="input" placeholder="골프장 이름 (예: 화성상록)" value="${esc(q)}" autocomplete="off"></div>

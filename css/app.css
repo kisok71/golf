@@ -389,7 +389,11 @@ button.li { width: 100%; text-align: left; }
 /* ── 오버레이 ── */
 .overlay { position: fixed; inset: 0; z-index: 50; background: rgba(6, 16, 11, .5); display: flex; align-items: flex-end; justify-content: center; animation: fade .18s; }
 .sheet { width: 100%; max-width: 560px; background: var(--surface); border-radius: 24px 24px 0 0; padding: 10px 16px calc(var(--safe-b) + 20px); animation: up .22s cubic-bezier(.2, .8, .2, 1); max-height: 90dvh; overflow: auto; }
-.sheet .grab { width: 40px; height: 4px; background: var(--line); border-radius: 2px; margin: 0 auto 14px; }
+/* 손잡이 막대와 닫기(×) 버튼을 한 줄로 차지해서, 뒤에 오는 내용이 항상 그 아래부터 시작하게 한다 (겹치지 않는다) */
+.sheet-head { position: relative; height: 28px; margin-bottom: 8px; }
+.sheet-head .grab { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); width: 40px; height: 4px; background: var(--line); border-radius: 2px; margin: 0; }
+.sheet-close { position: absolute; top: -4px; right: -6px; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--ink-2); }
+.sheet-close:active { transform: scale(.94); }
 .sheet h3 { margin: 0 0 4px; font-size: 18px; }
 .sheet p { margin: 0 0 14px; color: var(--ink-2); }
 .sheet .opts { display: grid; gap: 10px; }

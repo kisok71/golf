@@ -1,7 +1,7 @@
 import { db } from '../db.js';
 import { ic } from '../icons.js';
 import { esc, parsMini, parGridHtml, cyclePar, sum, validRating, validSlope } from '../util.js';
-import { pageHead, sheet, confirmDialog, toast } from '../ui.js';
+import { pageHead, sheet, sheetHead, confirmDialog, toast } from '../ui.js';
 
 export async function mount(el) {
   const draw = async () => {
@@ -30,7 +30,7 @@ async function editCourse(name, done) {
   let tees = (c.tees || []).map(t => ({ ...t }));
   const s = sheet('');
   const render = () => {
-    s.el.innerHTML = `<div class="grab"></div><h3>${esc(name)}</h3><p>홀별 파를 눌러 수정하세요 · 합계 <b class="num">${sum(pars)}</b></p>
+    s.el.innerHTML = `${sheetHead()}<h3>${esc(name)}</h3><p>홀별 파를 눌러 수정하세요 · 합계 <b class="num">${sum(pars)}</b></p>
       ${parGridHtml(pars)}
       ${nines.length ? `<div class="section-title" style="margin:16px 4px 8px"><span>9홀 코스 이름</span></div><div class="chips" style="flex-wrap:wrap">${nines.map((n, i) => `<span class="chip">${esc(n.name)} · 파 ${sum(n.pars)}<button data-a="del-nine" data-i="${i}" aria-label="${esc(n.name)} 삭제" style="margin-left:2px;font-weight:800">×</button></span>`).join('')}</div><p class="small muted" style="margin:6px 4px 0">잘못 입력한 이름은 ×로 지울 수 있어요. 이미 기록한 라운드는 그대로예요.</p>` : ''}
       <div class="section-title" style="margin:16px 4px 8px"><span>티 · 코스 레이팅 / 슬로프</span></div>
