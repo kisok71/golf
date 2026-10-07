@@ -1,4 +1,7 @@
 import { sum, splitNines } from './util.js';
+import { detectGrid, applyCellReads, suspectCells, labeledParCount } from './scoregrid.js';
+
+export { applyCellReads, suspectCells };
 
 /* 스코어카드 OCR 결과(단어 목록)를 해석하는 순수 로직. DOM에 의존하지 않는다. */
 
@@ -231,6 +234,13 @@ export function dropOthers(rows, matchedBy) {
  * 결과는 사용자가 확인·수정하는 화면의 초안이다.
  */
 export function parseScorecard(data, { player = '', aliases = [], playerIdx = null } = {}) {
+  // PAR · 타수 · 퍼팅 · OB · 해저드 줄이 이름표와 함께 있는 표는 글자 위치로 읽는다 (선수 이름 줄이 있는 카드는 아래 기존 방식)
+  const grid = detectGrid(data);
+  // 라벨형 카드로 보이는데 표를 덜 읽었으면(partialGrid) 호출한 쪽이 다른 방식으로 한 번 더 읽어 보게 한다
+  const parLabels = labeledParCount(data);
+  if (grid) {
+    return { rows: grid.rows, playerMatched: false, matchedBy: 'grid', cellsToRead: grid.cellsToRead, cardTotal: grid.cardTotal, partialGrid: grid.tables < parLabels, ...findMeta(data.text || '', { player }) };
+  }
   const rows = buildRows(data.words || []);
   const out = [];
   let range = 'front', parsSeen = 0, sawHeader = false, parSums = null, headers = 0, cardRel = false;
@@ -292,7 +302,7 @@ export function parseScorecard(data, { player = '', aliases = [], playerIdx = nu
   }
 
   const matchedBy = selectMyRows(out, { player, aliases, playerIdx });
-  return { rows: dropOthers(out, matchedBy), playerMatched: matchedBy === 'name', matchedBy, ...findMeta(data.text || '', { player }) };
+  return { rows: dropOthers(out, matchedBy), playerMatched: matchedBy === 'name', matchedBy, partialGrid: parLabels > 0 && matchedBy !== 'name', ...findMeta(data.text || '', { player }) };
 }
 
 /** 화면 제목·버튼처럼 골프장 이름이 아닌 문구 */
@@ -317,9 +327,24 @@ export function findMeta(text, { player = '' } = {}) {
   const holeAt = lines.findIndex(l => /\bHOLE\b/i.test(l));
   const head = lines.slice(0, holeAt > 0 ? holeAt : Math.min(lines.length, 12));
 
+  // "전반 동 · 후반 서" 또는 표 제목 "전반 · 동" / "후반 · 서" 처럼 이름표가 붙은 표기 (OCR은 가운뎃점을 ㆍ 로 읽기도 한다).
+  // 헤더 글씨가 작아서 한 군데가 틀리게 읽혀도, 표 제목과 같은 값이 많은 쪽을 고른다 (동점이면 한글 이름 우선)
+  let front = '', back = '';
+  const SEP = '[·ㆍ・•․‧.,:;/\\s]*', NAME = '([가-힣A-Za-z0-9]{1,6})', SKIP = /^(합계|스코어|타수|점수|계|합|out|in|total|\d{1,2}홀?|\d{1,2}h)$/i;
+  const vote = word => {
+    const count = new Map();
+    for (const m of String(text).matchAll(new RegExp(`${word}${SEP}${NAME}`, 'g'))) {
+      const v = m[1];
+      if (SKIP.test(v) || /^[전후]반/.test(v)) continue;
+      count.set(v, (count.get(v) || 0) + 1);
+    }
+    const hangul = v => (/[가-힣]/.test(v) ? 1 : 0);
+    return [...count].sort((x, y) => y[1] - x[1] || hangul(y[0]) - hangul(x[0]))[0]?.[0] || '';
+  };
+  front = vote('전\\s*반'); back = vote('후\\s*반');
+
   // 전반-후반 9홀 코스 이름("동-서")을 먼저 떼어내고, 남은 글자에서 골프장 이름을 찾는다.
   // 같은 줄에 "화성상록 동-서"처럼 함께 있어도 나뉜다.
-  let front = '', back = '';
   const rest = head.map(ln => {
     if (front) return ln;
     const sp = splitNines(ln);

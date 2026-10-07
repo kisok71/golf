@@ -186,6 +186,78 @@ export async function recognize(canvas, onProgress, { psm = '11', lang = 'eng' }
 }
 
 /**
+ * 잘라낸 칸의 가장자리와 이어진 어두운 덩어리(상자로 둘러싼 숫자의 테두리, 칸 괘선)를 지운다.
+ * 숫자는 칸 안쪽에 떠 있으므로 지워지지 않고, 칸 크기가 조금 어긋나 테두리가 걸쳐도 숫자만 남는다.
+ * 지운 뒤 남은 어두운 픽셀의 비율(= 숫자 잉크 비율)을 돌려준다.
+ */
+function eraseBorderInk(img, floodThr = 190, inkThr = 150) {
+  const { width: w, height: h, data } = img;
+  const dark = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) dark[i] = data[i * 4] < floodThr ? 1 : 0;
+  const stack = [];
+  const seed = (x, y) => { const i = y * w + x; if (dark[i] === 1) { dark[i] = 2; stack.push(i); } };
+  for (let x = 0; x < w; x++) { seed(x, 0); seed(x, h - 1); }
+  for (let y = 0; y < h; y++) { seed(0, y); seed(w - 1, y); }
+  while (stack.length) {
+    const i = stack.pop(), x = i % w, y = (i / w) | 0;
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const nx = x + dx, ny = y + dy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        const j = ny * w + nx;
+        if (dark[j] === 1) { dark[j] = 2; stack.push(j); }
+      }
+    }
+  }
+  let ink = 0;
+  for (let i = 0; i < w * h; i++) {
+    if (dark[i] === 2) { data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = 255; }
+    else if (data[i * 4] < inkThr) ink++;
+  }
+  return ink / (w * h);
+}
+
+/**
+ * 표의 칸(좌표 상자)마다 잘라서 숫자만 읽는다. 상자로 둘러싼 숫자나 빈 칸이 섞인 표에서 줄 단위 인식이 놓친 칸을 채운다.
+ * 먼저 칸 안의 잉크(어두운 픽셀) 비율을 재서 거의 없으면 빈 칸으로 보고 글자 인식을 건너뛴다.
+ * boxes: [{ x0, y0, x1, y1 }] (canvas 좌표) → [{ text(숫자 문자열), ink(잉크 비율), conf }]
+ */
+export async function ocrCells(canvas, boxes, { lang = 'eng', inkMin = 0.012 } = {}) {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const worker = await getWorker(lang);
+  const prevCb = progressCb;
+  progressCb = null; // 칸마다 진행률이 0→1로 오가며 진행 막대가 출렁이지 않게 한다
+  const out = [];
+  try {
+    await worker.setParameters({ tessedit_pageseg_mode: '7', tessedit_char_whitelist: '0123456789', preserve_interword_spaces: '0', user_defined_dpi: '300' });
+    for (const b of boxes) {
+      const x0 = Math.max(0, Math.round(b.x0)), y0 = Math.max(0, Math.round(b.y0));
+      const w = Math.min(canvas.width, Math.round(b.x1)) - x0, h = Math.min(canvas.height, Math.round(b.y1)) - y0;
+      if (w < 8 || h < 8) { out.push({ text: '', ink: 0, conf: 0 }); continue; }
+      const img = ctx.getImageData(x0, y0, w, h);
+      const ink = eraseBorderInk(img);
+      if (ink < inkMin) { out.push({ text: '', ink, conf: 100 }); continue; }
+      const scale = Math.max(1.5, 80 / h), pad = 24;
+      const tmp = document.createElement('canvas');
+      tmp.width = w; tmp.height = h;
+      tmp.getContext('2d').putImageData(img, 0, 0);
+      const c = document.createElement('canvas');
+      c.width = Math.round(w * scale) + pad * 2; c.height = Math.round(h * scale) + pad * 2;
+      const cx = c.getContext('2d');
+      cx.fillStyle = '#fff'; cx.fillRect(0, 0, c.width, c.height);
+      cx.imageSmoothingQuality = 'high';
+      cx.drawImage(tmp, 0, 0, w, h, pad, pad, w * scale, h * scale);
+      const { data } = await worker.recognize(c);
+      out.push({ text: String(data.text || '').replace(/\D/g, ''), ink, conf: data.confidence });
+    }
+  } finally {
+    progressCb = prevCb;
+    try { await worker.setParameters({ tessedit_char_whitelist: '' }); } catch { /* noop */ }
+  }
+  return out;
+}
+
+/**
  * 각 줄의 이름 칸(숫자 왼쪽)만 잘라 크게 키운 뒤 한 줄 글자로 다시 읽는다.
  * 작은 한글 이름이 통째 화면을 읽을 때 틀리게 나오는 경우를 줄인다.
  * boxes: [{ firstX, y0, y1 }] (canvas 좌표) → 각 줄의 이름 문자열

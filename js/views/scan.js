@@ -1,7 +1,7 @@
 import { ic } from '../icons.js';
 import { esc, newRound, DEFAULT_PARS, todayStr, sum, defaultPutts, splitNines } from '../util.js';
-import { loadBitmap, preprocess, recognize, thumbnail, ocrLabels } from '../ocr.js';
-import { parseScorecard, chunkSums, matchesName, selectMyRows, dropOthers } from '../scorecard.js';
+import { loadBitmap, preprocess, recognize, thumbnail, ocrLabels, ocrCells } from '../ocr.js';
+import { parseScorecard, chunkSums, matchesName, selectMyRows, dropOthers, applyCellReads, suspectCells } from '../scorecard.js';
 import { pageHead, toast } from '../ui.js';
 import { setDraft } from './editor.js';
 
@@ -15,7 +15,7 @@ const addAlias = a => { try { const l = getAliases(); if (a && !l.includes(a)) l
 const getIdx = () => { try { const v = localStorage.getItem(PIDX); return v == null ? null : Number(v); } catch { return null; } };
 const setIdx = v => { try { localStorage.setItem(PIDX, String(v)); } catch { /* noop */ } };
 
-const ROLES = [['ignore', '사용 안 함'], ['par', '파'], ['score', '내 스코어'], ['score_rel', '내 스코어 (파 대비)'], ['putts', '퍼팅']];
+const ROLES = [['ignore', '사용 안 함'], ['par', '파'], ['score', '내 스코어'], ['score_rel', '내 스코어 (파 대비)'], ['putts', '퍼팅'], ['ob', 'OB'], ['hazard', '해저드']];
 const RANGES = [['front', '전반 1-9'], ['back', '후반 10-18']];
 
 const STATUS = {
@@ -37,11 +37,12 @@ const ATTEMPTS = [
 /** 행들에서 홀 번호(0~17)별 파 / 스코어 / 파대비 / 퍼팅 배열을 만든다 */
 function collect(rows) {
   const pars = Array(18).fill(null), score = Array(18).fill(null), rel = Array(18).fill(null), putts = Array(18).fill(null);
+  const ob = Array(18).fill(null), hazard = Array(18).fill(null);
   let n = 9;
   for (const r of rows) {
     if (r.role === 'ignore') continue;
     const base = r.vals.length > 9 ? 0 : r.range === 'back' ? 9 : 0;
-    const target = r.role === 'par' ? pars : r.role === 'score' ? score : r.role === 'score_rel' ? rel : putts;
+    const target = r.role === 'par' ? pars : r.role === 'score' ? score : r.role === 'score_rel' ? rel : r.role === 'ob' ? ob : r.role === 'hazard' ? hazard : putts;
     r.vals.forEach((v, k) => {
       const idx = base + k;
       if (idx >= 18 || v == null) return;
@@ -50,7 +51,7 @@ function collect(rows) {
     });
     if (r.vals.length > 9 || r.range === 'back') n = 18;
   }
-  return { pars, score, rel, putts, n };
+  return { pars, score, rel, putts, ob, hazard, n };
 }
 
 /** 소계(합계) 칸과 읽은 숫자의 합이 맞는지 검사한다 */
@@ -109,10 +110,22 @@ export async function mount(el) {
         const p = parseScorecard(data, { player, aliases, playerIdx });
         meta = { date: meta.date || p.date, time: meta.time || p.time, title: meta.title || p.title, front: meta.front || p.front, back: meta.back || p.back };
         if (!parsed || used(p.rows) > used(parsed.rows)) { parsed = p; parsedCv = cv; }
-        if (parsed.rows.some(r => r.role === 'par') && parsed.rows.some(r => r.role === 'score' || r.role === 'score_rel')) break;
+        if (!parsed.partialGrid && parsed.rows.some(r => r.role === 'par') && parsed.rows.some(r => r.role === 'score' || r.role === 'score_rel')) break;
       }
-      // 이름을 못 찾았으면 각 줄의 이름 칸만 크게 잘라 다시 읽어 본다
-      if (player && parsed.matchedBy !== 'name') {
+      // 라벨형 표(PAR · 타수 · 퍼팅 · OB · 해저드): 상자로 둘러싼 숫자나 빈 칸처럼 줄 단위로 못 읽은 칸을 칸만 잘라 다시 읽는다
+      if (parsed.cellsToRead?.length) {
+        try {
+          state.status = '칸마다 숫자를 다시 읽는 중…'; state.progress = 0.85; update({});
+          // 1차: 놓친 칸 · 의심스러운 칸 / 2차: 그래도 합계(계)와 안 맞는 줄의 나머지 칸
+          for (let pass = 0; pass < 2 && parsed.cellsToRead?.length; pass++) {
+            const reads = await ocrCells(parsedCv, parsed.cellsToRead.map(e => e.box));
+            applyCellReads(parsed, reads);
+            parsed.cellsToRead = suspectCells(parsed);
+          }
+        } catch (e) { console.warn('칸별 인식 실패', e); }
+      }
+      // 이름을 못 찾았으면 각 줄의 이름 칸만 크게 잘라 다시 읽어 본다 (이름 줄이 없는 라벨형 표는 해당 없음)
+      if (player && parsed.matchedBy !== 'name' && parsed.matchedBy !== 'grid') {
         try {
           state.status = '이름을 다시 읽는 중…'; state.progress = 0.9; update({});
           const cands = parsed.rows.filter(r => r.candidate && r.box).slice(0, 10);
@@ -124,7 +137,7 @@ export async function mount(el) {
         } catch (e) { console.warn('이름 재인식 실패', e); }
       }
       state = {
-        phase: 'review', matchedBy: parsed.matchedBy, preview: prevUrl, image, rows: parsed.rows, player, playerMatched: parsed.playerMatched,
+        phase: 'review', matchedBy: parsed.matchedBy, cardTotal: parsed.cardTotal ?? null, preview: prevUrl, image, rows: parsed.rows, player, playerMatched: parsed.playerMatched,
         date: meta.date || todayStr(), dateFound: !!meta.date, time: meta.time || '', title: meta.title || '', front: meta.front || '', back: meta.back || ''
       };
     } catch (err) {
@@ -196,7 +209,7 @@ export async function mount(el) {
   function apply() {
     const rows = state.rows.filter(r => r.role !== 'ignore');
     if (!rows.some(r => r.role === 'score' || r.role === 'score_rel')) { toast('“내 스코어”로 사용할 줄을 하나 골라주세요'); return; }
-    const { pars, score, rel, putts, n } = collect(rows);
+    const { pars, score, rel, putts, ob, hazard, n } = collect(rows);
     const parAt = i => (pars[i] >= 3 && pars[i] <= 6 ? pars[i] : DEFAULT_PARS[i]);
     const round = newRound(n);
     round.date = state.date || todayStr();
@@ -209,7 +222,7 @@ export async function mount(el) {
       const s = score[i] != null ? score[i] : rel[i] != null ? parAt(i) + rel[i] : null;
       const p = putts[i];
       const ok = s != null && s >= 1;
-      return { score: ok ? s : null, putts: !ok ? null : p != null && p <= s ? p : defaultPutts(s), ob: 0, hazard: 0 };
+      return { score: ok ? s : null, putts: !ok ? null : p != null && p <= s ? p : defaultPutts(s), ob: ob[i] ?? 0, hazard: hazard[i] ?? 0 };
     });
     round.image = state.image;
     setDraft(round, { step: 'info', fromScan: true });
@@ -236,7 +249,8 @@ function pickHtml(s) {
       <ul class="tips">
         <li>스마트스코어 같은 앱의 <b>결과 화면 스크린샷</b>이 가장 정확해요</li>
         <li>종이 카드는 표 전체가 꽉 차게, 정면에서 밝게 찍어주세요</li>
-        <li>코스명 · 날짜 · 시간 · 홀별 파 · 내 스코어를 읽어와요</li>
+        <li>코스명 · 날짜 · 시간 · 전반/후반 코스 · 홀별 파 · 스코어를 읽어와요</li>
+        <li><b>PAR · 타수 · 퍼팅 · OB · 해저드</b> 줄이 있는 표는 퍼팅 · OB · 해저드까지 함께 채워요</li>
         <li>읽은 뒤 <b>확인·수정 화면</b>이 나오니 틀린 칸만 고치면 돼요</li>
       </ul></div>`;
 }
@@ -247,6 +261,16 @@ function busyHtml(s) {
     <div class="card" style="margin-top:14px"><div id="status" style="font-weight:700;margin-bottom:10px">${esc(s.status)}</div>
       <div class="progress"><i style="width:${Math.round(s.progress * 100)}%"></i></div>
       <p class="hint" style="margin:10px 0 0">처음 한 번은 엔진을 준비하느라 조금 더 걸려요. (한글 인식 포함)</p></div>`;
+}
+
+/** 카드 맨 위의 총점과 읽은 타수 합계를 맞춰 본다 */
+function totalCheck(s) {
+  if (s.cardTotal == null) return '';
+  const rows = s.rows.filter(r => r.role === 'score');
+  if (!rows.length) return '';
+  const got = sum(rows.flatMap(r => r.vals).filter(v => v != null));
+  const ok = got === s.cardTotal;
+  return `<div class="banner" style="background:color-mix(in srgb,${ok ? 'var(--brand)' : 'var(--over)'} 14%,transparent);color:${ok ? 'var(--good-text)' : 'var(--bad-text)'}">${ic(ok ? 'check' : 'alert', 18)}<span class="grow">${ok ? `카드 총점 ${s.cardTotal}과 읽은 타수 합계가 일치해요` : `카드 총점 ${s.cardTotal} ↔ 읽은 타수 합계 ${got} — 숫자를 확인하세요`}</span></div>`;
 }
 
 function reviewHtml(s) {
@@ -260,8 +284,8 @@ function reviewHtml(s) {
         : `합계가 달라요 · 카드 ${chk.map(c => c.sub).join(' / ')} ↔ 읽은 값 ${chk.map(c => c.calc).join(' / ')} — 숫자를 확인하세요`}</div>` : '';
     return `<div class="scanrow ${r.role === 'ignore' ? 'ignored' : ''}">
       <div class="row between" style="margin-bottom:6px">
-        <div class="small" style="font-weight:700">${r.label ? esc(r.label) : '<span class="muted">이름 없음</span>'}${r.labelAlt && r.labelAlt !== r.label ? ` <span class="muted" style="font-weight:500">(다시 읽음: ${esc(r.labelAlt)})</span>` : ''}${r.role === 'score' || r.role === 'score_rel' ? ' <span class="badge">내 줄</span>' : ''}</div>
-        ${r.candidate && r.role === 'ignore' ? `<button class="chip" data-mine="${ri}" style="min-height:32px">내 줄로 선택</button>` : ''}
+        <div class="small" style="font-weight:700">${r.label ? esc(r.label) : '<span class="muted">이름 없음</span>'}${r.labelAlt && r.labelAlt !== r.label ? ` <span class="muted" style="font-weight:500">(다시 읽음: ${esc(r.labelAlt)})</span>` : ''}${(r.role === 'score' || r.role === 'score_rel') && !r.grid ? ' <span class="badge">내 줄</span>' : ''}</div>
+        ${r.candidate && r.role === 'ignore' && !r.grid ? `<button class="chip" data-mine="${ri}" style="min-height:32px">내 줄로 선택</button>` : ''}
       </div>
       <div class="rh">
         <select data-role="${ri}" aria-label="줄 ${ri + 1} 용도">${ROLES.map(([k, l]) => `<option value="${k}"${r.role === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
@@ -276,7 +300,7 @@ function reviewHtml(s) {
   }).join('');
 
   const warn = t => `<div class="banner" style="background:color-mix(in srgb,#eda100 18%,transparent);color:var(--ink)">${ic('alert', 18)}<span class="grow">${t}</span></div>`;
-  const notice = s.matchedBy === 'name' || s.matchedBy === 'manual' ? ''
+  const notice = s.matchedBy === 'name' || s.matchedBy === 'manual' || s.matchedBy === 'grid' ? ''
     : s.matchedBy === 'index' ? warn('이름은 못 찾았지만 지난번에 고른 위치의 줄을 선택했어요. 맞는지 확인하세요.')
     : s.player ? warn(`“${esc(s.player)}” 이름을 찾지 못했어요. 첫 번째 줄을 임시로 골랐어요. 내 줄이 아니면 그 줄의 <b>내 줄로 선택</b>을 눌러주세요. 한 번 고르면 다음부터 기억해요.`)
     : warn('내 이름이 저장돼 있지 않아요. 설정에서 이름을 저장하거나, 내 줄의 <b>내 줄로 선택</b>을 눌러주세요.');
@@ -301,7 +325,8 @@ function reviewHtml(s) {
     </div>
     <div class="section-title"><span>인식된 숫자 줄 ${s.rows.length}개</span></div>
     ${notice}
-    ${hasRows ? `<p class="hint small muted" style="margin:0 4px 10px">각 줄의 용도를 확인하세요. 같은 카드에 여러 명이 있으면 <b>내 줄</b>만 “내 스코어”로 지정하세요.</p>${rowsHtml}`
+    ${totalCheck(s)}
+    ${hasRows ? `<p class="hint small muted" style="margin:0 4px 10px">${s.matchedBy === 'grid' ? '줄 이름(PAR · 타수 · 퍼팅 · OB · 해저드)을 보고 자동으로 나눴어요. 숫자가 맞는지 확인하세요.' : '각 줄의 용도를 확인하세요. 같은 카드에 여러 명이 있으면 <b>내 줄</b>만 “내 스코어”로 지정하세요.'}</p>${rowsHtml}`
       : `<div class="card empty" style="padding:24px"><h2>숫자 줄을 찾지 못했어요</h2><p>표가 화면에 꽉 차게, 더 선명하게 다시 찍어보세요.</p></div>`}
     <div class="grid-2" style="margin-top:16px">
       <button class="btn secondary" id="retry">${ic('camera')} 다시 선택</button>
